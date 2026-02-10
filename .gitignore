@@ -1,0 +1,30 @@
+# --- Build Output del Makefile (FONDAMENTALE) ---
+build/
+
+# --- File Oggetto e Dipendenze ---
+*.o
+*.d
+*.i
+*.lst
+
+# --- Binari ed Eseguibili ---
+*.elf
+*.bin
+*.hex
+*.map
+
+# --- IDE & Editor (VS Code, Eclipse, etc) ---
+.vscode/
+.settings/
+.project
+.cproject
+.gdb_history       # Storico del debugger
+compile_commands.json # File per l'intellisense di C/C++
+
+# --- Cartelle Build Standard (Se usi anche un IDE) ---
+Debug/
+Release/
+
+# --- File di Sistema (Mac/Windows) ---
+.DS_Store
+Thumbs.db
