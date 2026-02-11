@@ -1,31 +1,35 @@
-// Example tasks and timeline configuration.
-// This keeps application-specific tasks separate from the scheduler core.
-
 #include "timeline_config.h"
-#include "task.h"
 
-// ---- Example tasks -------------------------------------------------------
-// Replace these with your real application tasks.
+static void vHrtSensorTask(void * pvArg)
+{
+    (void) pvArg;
+}
 
-static void Task_A(void *arg) { (void)arg; /* do work */ }
-static void Task_B(void *arg) { (void)arg; /* do work */ }
-static void Task_X(void *arg) { (void)arg; /* do best-effort work */ }
-static void Task_Y(void *arg) { (void)arg; /* do best-effort work */ }
+static void vHrtControlTask(void * pvArg)
+{
+    (void) pvArg;
+}
 
-// ---- Example configuration -----------------------------------------------
-// HRT tasks should be listed in non-decreasing start_time_ms order within
-// the same sub-frame. SRT tasks are executed in the order listed here.
+static void vSrtLoggerTask(void * pvArg)
+{
+    (void) pvArg;
+}
 
-static const TimelineTaskConfig_t g_tasks[] = {
-    { "Task_A", Task_A, TASK_HARD_RT, 1, 7, 2, tskIDLE_PRIORITY + 3, 256 },
-    { "Task_B", Task_B, TASK_HARD_RT, 0, 4, 5, tskIDLE_PRIORITY + 3, 256 },
-    { "Task_X", Task_X, TASK_SOFT_RT, 0, 0, 0, tskIDLE_PRIORITY + 1, 256 },
-    { "Task_Y", Task_Y, TASK_SOFT_RT, 0, 0, 0, tskIDLE_PRIORITY + 1, 256 },
+static void vSrtDiagTask(void * pvArg)
+{
+    (void) pvArg;
+}
+
+static const TimelineTaskConfig_t xTasks[] = {
+    { "HRT_SENSE", vHrtSensorTask, TIMELINE_TASK_HRT, 0U, 0U, 2U, tskIDLE_PRIORITY + 3U, 256U },
+    { "HRT_CTRL",  vHrtControlTask, TIMELINE_TASK_HRT, 1U, 1U, 4U, tskIDLE_PRIORITY + 3U, 256U },
+    { "SRT_LOG",   vSrtLoggerTask, TIMELINE_TASK_SRT, 0U, 0U, 0U, tskIDLE_PRIORITY + 1U, 256U },
+    { "SRT_DIAG",  vSrtDiagTask, TIMELINE_TASK_SRT, 0U, 0U, 0U, tskIDLE_PRIORITY + 1U, 256U }
 };
 
-const TimelineConfig_t g_timeline = {
-    .major_frame_ms = 100,
-    .subframe_ms = 10,
-    .tasks = g_tasks,
-    .task_count = sizeof(g_tasks) / sizeof(g_tasks[0]),
+const TimelineConfig_t gTimelineConfig = {
+    .ulMajorFrameMs = 10U,
+    .ulSubframeMs = 5U,
+    .pxTasks = xTasks,
+    .ulTaskCount = (uint32_t) (sizeof(xTasks) / sizeof(xTasks[0]))
 };
