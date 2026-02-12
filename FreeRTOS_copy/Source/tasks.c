@@ -4776,8 +4776,12 @@ BaseType_t xTaskIncrementTick( void )
 
         /* Call the timeline scheduler tick hook from kernel tick processing.
          * The hook may notify/resume timeline-managed tasks and request a
-         * context switch by setting the higher priority flag. */
+         * context switch by setting the higher priority flag. If the port
+         * layer has been configured to call the timeline hook directly
+         * (TIMELINE_CALL_FROM_PORT), avoid calling it twice from the kernel. */
+    #ifndef TIMELINE_CALL_FROM_PORT
         vTimelineKernelHookTick( xConstTickCount, &xSwitchRequired );
+    #endif
 
         /* See if this tick has made a timeout expire.  Tasks are stored in
          * the  queue in the order of their wake time - meaning once one task

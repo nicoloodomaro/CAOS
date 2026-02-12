@@ -71,6 +71,29 @@ static BaseType_t prvValidateConfig(const TimelineConfig_t * pxConfig)
         }
     }
 
+    /* Verifica che gli SRT siano ordinati compatti nell'array per garantire ordine fisso */
+    {
+        BaseType_t xFoundFirstSrt = pdFALSE;
+        BaseType_t xFoundHrtAfterSrt = pdFALSE;
+        
+        for (ulIdx = 0U; ulIdx < pxConfig->ulTaskCount; ulIdx++) {
+            const TimelineTaskConfig_t * pxTask = &pxConfig->pxTasks[ulIdx];
+            
+            if (pxTask->xType == TIMELINE_TASK_SRT) {
+                xFoundFirstSrt = pdTRUE;
+            }
+            else if ((pxTask->xType == TIMELINE_TASK_HRT) && (xFoundFirstSrt != pdFALSE)) {
+                /* HRT trovato dopo che abbiamo gia' visto un SRT! Ordine mischiato */
+                xFoundHrtAfterSrt = pdTRUE;
+            }
+        }
+        
+        if (xFoundHrtAfterSrt != pdFALSE) {
+            /* Configurazione non valida: gli SRT devono essere dopo gli HRT per ordine */
+            return pdFALSE;
+        }
+    }
+
     return pdTRUE;
 }
 
@@ -198,6 +221,7 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
     TickType_t xTicksFromFrame;
     TickType_t xTickInSubframe;
     uint32_t ulCurrentSubframe;
+    BaseType_t xSrtReleasedThisTick = pdFALSE;
 
     if ((xTimeline.xStarted == pdFALSE) || (xTimeline.pxConfig == NULL)) {
         return;
@@ -224,6 +248,22 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
             (pxTask->ulSubframeId == ulCurrentSubframe) &&
             (xTickInSubframe == pdMS_TO_TICKS(pxTask->ulStartOffsetMs)) &&
             (pxRt->xHandle != NULL)) {
+            
+            /* Sospendi immediatamente qualsiasi SRT in esecuzione per ridurre latenza di preemption */
+            uint32_t ulSrtProbe;
+            for (ulSrtProbe = 0U; ulSrtProbe < xTimeline.pxConfig->ulTaskCount; ulSrtProbe++) {
+                const TimelineTaskConfig_t * pxSrtTask = &xTimeline.pxConfig->pxTasks[ulSrtProbe];
+                TimelineTaskRuntime_t * pxSrtRt = &xTimeline.xRuntime[ulSrtProbe];
+                
+                if ((pxSrtTask->xType == TIMELINE_TASK_SRT) &&
+                    (pxSrtRt->xHandle != NULL) &&
+                    (pxSrtRt->xIsActive != pdFALSE)) {
+                    /* SRT attivo: sospendilo immediatamente per fare spazio all'HRT */
+                    (void) xTaskSuspendFromISR(pxSrtRt->xHandle);
+                    pxSrtRt->xIsActive = pdFALSE;
+                }
+            }
+            
             pxRt->xIsActive = pdTRUE;
             pxRt->xCompletedInWindow = pdFALSE;
             pxRt->ulReleaseCount++;
@@ -252,11 +292,16 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
                 }
             }
 
-            if (xNoHrtActive != pdFALSE) {
+            /* Release only the first eligible SRT in compile-time order
+             * to enforce fixed ordering. Subsequent SRTs are released
+             * when the preceding one completes. */
+            if ((xNoHrtActive != pdFALSE) && (xSrtReleasedThisTick == pdFALSE) &&
+                (pxRt->xCompletedInWindow == pdFALSE)) {
                 pxRt->xIsActive = pdTRUE;
                 pxRt->ulReleaseCount++;
                 vTaskNotifyGiveFromISR(pxRt->xHandle, pxHigherPriorityTaskWoken);
                 (void) xTaskResumeFromISR(pxRt->xHandle);
+                xSrtReleasedThisTick = pdTRUE;
             }
         }
     }
@@ -324,6 +369,30 @@ void vTimelineSchedulerTaskCompletedFromTaskContext(UBaseType_t uxTaskIndex)
     xTimeline.xRuntime[uxTaskIndex].xIsActive = pdFALSE;
     xTimeline.xRuntime[uxTaskIndex].ulCompletionCount++;
     taskEXIT_CRITICAL();
+
+    /* Immediately release the next SRT in fixed order (if any) so SRTs
+     * execute sequentially within the available idle time of the subframe. */
+    {
+        uint32_t ulIdx;
+
+        for (ulIdx = 0U; ulIdx < xTimeline.pxConfig->ulTaskCount; ulIdx++) {
+            const TimelineTaskConfig_t * pxTask = &xTimeline.pxConfig->pxTasks[ulIdx];
+            TimelineTaskRuntime_t * pxRt = &xTimeline.xRuntime[ulIdx];
+
+            if ((pxTask->xType == TIMELINE_TASK_SRT) && (pxRt->xHandle != NULL) &&
+                (pxRt->xIsActive == pdFALSE) && (pxRt->xCompletedInWindow == pdFALSE)) {
+                /* Mark active and release from task context. */
+                taskENTER_CRITICAL();
+                pxRt->xIsActive = pdTRUE;
+                pxRt->ulReleaseCount++;
+                taskEXIT_CRITICAL();
+
+                vTaskNotifyGive(pxRt->xHandle);
+                (void) xTaskResume(pxRt->xHandle);
+                break; /* release only the next SRT */
+            }
+        }
+    }
 }
 
 const TimelineTaskRuntime_t * pxTimelineSchedulerGetRuntime(uint32_t * pulTaskCount)
