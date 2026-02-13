@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-void vTimelineKernelHookSchedulerStart(void);
+void vTimelineKernelHookSchedulerStart(TickType_t xStartTick);
 void vTimelineKernelHookTick(TickType_t xTickCount, BaseType_t * pxHigherPriorityTaskWoken);
 TaskHandle_t xTimelineKernelHookSelectTask(TaskHandle_t xDefaultSelected, TickType_t xTickCount);
 

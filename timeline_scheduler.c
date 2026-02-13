@@ -1,5 +1,4 @@
 #include "timeline_scheduler.h"
-
 #include "timers.h"
 
 #ifndef TIMELINE_ASSERT
@@ -19,11 +18,70 @@ typedef struct TimelineSchedulerState {
     BaseType_t xConfigValid;
     BaseType_t xFrameResetPending;
     TickType_t xLastTickSeen;
+    uint32_t ulFrameId;
     TimelineTaskContext_t xTaskContexts[TIMELINE_MAX_TASKS];
     TimelineTaskRuntime_t xRuntime[TIMELINE_MAX_TASKS];
 } TimelineSchedulerState_t;
 
 static TimelineSchedulerState_t xTimeline;
+
+#ifndef TIMELINE_TRACE_BUFFER_LEN
+#define TIMELINE_TRACE_BUFFER_LEN    256U
+#endif
+
+typedef struct TimelineTraceBufferState {
+    TimelineTraceEvent_t xEvents[TIMELINE_TRACE_BUFFER_LEN];
+    uint32_t ulHead;
+    uint32_t ulTail;
+} TimelineTraceBufferState_t;
+
+static TimelineTraceBufferState_t xTrace;
+
+static uint32_t prvComputeCurrentSubframe(void)
+{
+    TickType_t xTicksFromFrame;
+
+    if ((xTimeline.pxConfig == NULL) || (xTimeline.xSubframeTicks == 0U)) {
+        return 0U;
+    }
+
+    xTicksFromFrame = xTimeline.xLastTickSeen - xTimeline.xFrameStartTick;
+    return (uint32_t) (xTicksFromFrame / xTimeline.xSubframeTicks);
+}
+
+static void prvTracePush(TimelineTraceEventType_t xType, UBaseType_t uxTaskIndex, uint32_t ulSubframeId)
+{
+    uint32_t ulNextHead;
+
+    xTrace.xEvents[xTrace.ulHead].xTick = xTimeline.xLastTickSeen;
+    xTrace.xEvents[xTrace.ulHead].ulFrameId = xTimeline.ulFrameId;
+    xTrace.xEvents[xTrace.ulHead].ulSubframeId = ulSubframeId;
+    xTrace.xEvents[xTrace.ulHead].uxTaskIndex = uxTaskIndex;
+    xTrace.xEvents[xTrace.ulHead].xType = xType;
+
+    ulNextHead = (xTrace.ulHead + 1U) % TIMELINE_TRACE_BUFFER_LEN;
+    xTrace.ulHead = ulNextHead;
+
+    if (xTrace.ulHead == xTrace.ulTail) {
+        xTrace.ulTail = (xTrace.ulTail + 1U) % TIMELINE_TRACE_BUFFER_LEN;
+    }
+}
+
+static void prvTracePushFromTask(TimelineTraceEventType_t xType, UBaseType_t uxTaskIndex, uint32_t ulSubframeId)
+{
+    taskENTER_CRITICAL();
+    prvTracePush(xType, uxTaskIndex, ulSubframeId);
+    taskEXIT_CRITICAL();
+}
+
+static void prvTracePushFromISR(TimelineTraceEventType_t xType, UBaseType_t uxTaskIndex, uint32_t ulSubframeId)
+{
+    UBaseType_t uxSavedInterruptStatus;
+
+    uxSavedInterruptStatus = taskENTER_CRITICAL_FROM_ISR();
+    prvTracePush(xType, uxTaskIndex, ulSubframeId);
+    taskEXIT_CRITICAL_FROM_ISR(uxSavedInterruptStatus);
+}
 
 static void prvTimelineManagedTask(void * pvArg)
 {
@@ -137,6 +195,34 @@ static BaseType_t prvCreateManagedTaskIfMissing(UBaseType_t uxIndex)
     return pdPASS;
 }
 
+BaseType_t xTimelineSchedulerIsConfigured(void)
+{
+    if ((xTimeline.xConfigValid != pdFALSE) && (xTimeline.pxConfig != NULL)) {
+        return pdTRUE;
+    }
+
+    return pdFALSE;
+}
+
+uint32_t ulTimelineSchedulerTraceRead(TimelineTraceEvent_t * pxBuffer, uint32_t ulMaxEvents)
+{
+    uint32_t ulReadCount = 0U;
+
+    if ((pxBuffer == NULL) || (ulMaxEvents == 0U)) {
+        return 0U;
+    }
+
+    taskENTER_CRITICAL();
+    while ((xTrace.ulTail != xTrace.ulHead) && (ulReadCount < ulMaxEvents)) {
+        pxBuffer[ulReadCount] = xTrace.xEvents[xTrace.ulTail];
+        xTrace.ulTail = (xTrace.ulTail + 1U) % TIMELINE_TRACE_BUFFER_LEN;
+        ulReadCount++;
+    }
+    taskEXIT_CRITICAL();
+
+    return ulReadCount;
+}
+
 static void prvProcessPendingKillsAndRecreate(void)
 {
     uint32_t ulIdx;
@@ -175,6 +261,9 @@ BaseType_t xTimelineSchedulerConfigure(const TimelineConfig_t * pxConfig)
     xTimeline.xConfigValid = pdTRUE;
     xTimeline.xFrameResetPending = pdFALSE;
     xTimeline.xLastTickSeen = 0;
+    xTimeline.ulFrameId = 0U;
+    xTrace.ulHead = 0U;
+    xTrace.ulTail = 0U;
 
     for (ulIdx = 0U; ulIdx < TIMELINE_MAX_TASKS; ulIdx++) {
         xTimeline.xRuntime[ulIdx].xHandle = NULL;
@@ -212,7 +301,9 @@ void vTimelineSchedulerKernelStart(TickType_t xStartTick)
     xTimeline.xFrameStartTick = xStartTick;
     xTimeline.xLastTickSeen = xStartTick;
     xTimeline.xStarted = pdTRUE;
+    xTimeline.ulFrameId = 0U;
     prvResetFrameRuntimeState();
+    prvTracePushFromTask(TIMELINE_TRACE_EVT_FRAME_START, 0U, 0U);
 }
 
 void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherPriorityTaskWoken)
@@ -234,7 +325,9 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
         xTimeline.xFrameStartTick = xNowTick;
         xTimeline.xFrameResetPending = pdTRUE;
         xTicksFromFrame = 0;
+        xTimeline.ulFrameId++;
         prvResetFrameRuntimeState();
+        prvTracePushFromISR(TIMELINE_TRACE_EVT_FRAME_START, 0U, 0U);
     }
 
     ulCurrentSubframe = (uint32_t) (xTicksFromFrame / xTimeline.xSubframeTicks);
@@ -248,27 +341,12 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
             (pxTask->ulSubframeId == ulCurrentSubframe) &&
             (xTickInSubframe == pdMS_TO_TICKS(pxTask->ulStartOffsetMs)) &&
             (pxRt->xHandle != NULL)) {
-            
-            /* Sospendi immediatamente qualsiasi SRT in esecuzione per ridurre latenza di preemption */
-            uint32_t ulSrtProbe;
-            for (ulSrtProbe = 0U; ulSrtProbe < xTimeline.pxConfig->ulTaskCount; ulSrtProbe++) {
-                const TimelineTaskConfig_t * pxSrtTask = &xTimeline.pxConfig->pxTasks[ulSrtProbe];
-                TimelineTaskRuntime_t * pxSrtRt = &xTimeline.xRuntime[ulSrtProbe];
-                
-                if ((pxSrtTask->xType == TIMELINE_TASK_SRT) &&
-                    (pxSrtRt->xHandle != NULL) &&
-                    (pxSrtRt->xIsActive != pdFALSE)) {
-                    /* SRT attivo: sospendilo immediatamente per fare spazio all'HRT */
-                    (void) xTaskSuspendFromISR(pxSrtRt->xHandle);
-                    pxSrtRt->xIsActive = pdFALSE;
-                }
-            }
-            
             pxRt->xIsActive = pdTRUE;
             pxRt->xCompletedInWindow = pdFALSE;
             pxRt->ulReleaseCount++;
             vTaskNotifyGiveFromISR(pxRt->xHandle, pxHigherPriorityTaskWoken);
             (void) xTaskResumeFromISR(pxRt->xHandle);
+            prvTracePushFromISR(TIMELINE_TRACE_EVT_HRT_RELEASE, (UBaseType_t) ulIdx, ulCurrentSubframe);
         }
 
         if ((pxTask->xType == TIMELINE_TASK_HRT) && (pxRt->xIsActive != pdFALSE) &&
@@ -277,6 +355,7 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
             pxRt->xDeadlineMissPendingKill = pdTRUE;
             pxRt->ulDeadlineMissCount++;
             pxRt->xIsActive = pdFALSE;
+            prvTracePushFromISR(TIMELINE_TRACE_EVT_DEADLINE_MISS, (UBaseType_t) ulIdx, ulCurrentSubframe);
         }
 
         if ((pxTask->xType == TIMELINE_TASK_SRT) && (pxRt->xHandle != NULL) &&
@@ -302,6 +381,7 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
                 vTaskNotifyGiveFromISR(pxRt->xHandle, pxHigherPriorityTaskWoken);
                 (void) xTaskResumeFromISR(pxRt->xHandle);
                 xSrtReleasedThisTick = pdTRUE;
+                prvTracePushFromISR(TIMELINE_TRACE_EVT_SRT_RELEASE, (UBaseType_t) ulIdx, ulCurrentSubframe);
             }
         }
     }
@@ -369,6 +449,7 @@ void vTimelineSchedulerTaskCompletedFromTaskContext(UBaseType_t uxTaskIndex)
     xTimeline.xRuntime[uxTaskIndex].xIsActive = pdFALSE;
     xTimeline.xRuntime[uxTaskIndex].ulCompletionCount++;
     taskEXIT_CRITICAL();
+    prvTracePushFromTask(TIMELINE_TRACE_EVT_TASK_COMPLETE, uxTaskIndex, prvComputeCurrentSubframe());
 
     /* Immediately release the next SRT in fixed order (if any) so SRTs
      * execute sequentially within the available idle time of the subframe. */
@@ -387,8 +468,9 @@ void vTimelineSchedulerTaskCompletedFromTaskContext(UBaseType_t uxTaskIndex)
                 pxRt->ulReleaseCount++;
                 taskEXIT_CRITICAL();
 
-                vTaskNotifyGive(pxRt->xHandle);
-                (void) xTaskResume(pxRt->xHandle);
+                xTaskNotifyGive(pxRt->xHandle);
+                vTaskResume(pxRt->xHandle);
+                prvTracePushFromTask(TIMELINE_TRACE_EVT_SRT_RELEASE, (UBaseType_t) ulIdx, prvComputeCurrentSubframe());
                 break; /* release only the next SRT */
             }
         }

@@ -53,7 +53,7 @@ Hook chiamato dal kernel per scegliere il prossimo task:
 In `FreeRTOS/Source/tasks.c` aggiungi chiamate ai hook nei punti chiave:
 
 1. All'avvio scheduler:
-- chiama `vTimelineKernelHookSchedulerStart()`
+- chiama `vTimelineKernelHookSchedulerStart( xTickCount )`
 
 2. Nel tick increment (path ISR):
 - chiama `vTimelineKernelHookTick(xTickCount, &xHigherPriorityTaskWoken)`
@@ -67,3 +67,5 @@ In `FreeRTOS/Source/tasks.c` aggiungi chiamate ai hook nei punti chiave:
 - La terminazione forzata per deadline miss e` gestita in modo deferred: il miss viene marcato in ISR, la delete avviene nel path kernel non-ISR.
 - Questo schema evita operazioni non sicure in ISR.
 - Per jitter <= 1 tick reale, serve timer HW/port layer coerente con i requisiti della board.
+- Se l'applicazione non ha configurato esplicitamente il timeline (`xTimelineSchedulerConfigure`),
+  l'hook di start effettua bootstrap automatico con `gTimelineConfig`.

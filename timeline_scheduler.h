@@ -46,13 +46,31 @@ typedef struct TimelineTaskRuntime {
     BaseType_t xDeadlineMissPendingKill;
 } TimelineTaskRuntime_t;
 
+typedef enum TimelineTraceEventType {
+    TIMELINE_TRACE_EVT_FRAME_START = 0,
+    TIMELINE_TRACE_EVT_HRT_RELEASE = 1,
+    TIMELINE_TRACE_EVT_SRT_RELEASE = 2,
+    TIMELINE_TRACE_EVT_TASK_COMPLETE = 3,
+    TIMELINE_TRACE_EVT_DEADLINE_MISS = 4
+} TimelineTraceEventType_t;
+
+typedef struct TimelineTraceEvent {
+    TickType_t xTick;
+    uint32_t ulFrameId;
+    uint32_t ulSubframeId;
+    UBaseType_t uxTaskIndex;
+    TimelineTraceEventType_t xType;
+} TimelineTraceEvent_t;
+
 BaseType_t xTimelineSchedulerConfigure(const TimelineConfig_t * pxConfig);
 BaseType_t xTimelineSchedulerCreateManagedTasks(void);
+BaseType_t xTimelineSchedulerIsConfigured(void);
 void vTimelineSchedulerKernelStart(TickType_t xStartTick);
 void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherPriorityTaskWoken);
 TaskHandle_t xTimelineSchedulerSelectNextTask(TaskHandle_t xDefaultSelected, TickType_t xNowTick);
 void vTimelineSchedulerTaskCompletedFromTaskContext(UBaseType_t uxTaskIndex);
 const TimelineTaskRuntime_t * pxTimelineSchedulerGetRuntime(uint32_t * pulTaskCount);
+uint32_t ulTimelineSchedulerTraceRead(TimelineTraceEvent_t * pxBuffer, uint32_t ulMaxEvents);
 
 #ifdef __cplusplus
 }
