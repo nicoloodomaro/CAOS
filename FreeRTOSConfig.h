@@ -44,6 +44,7 @@
 #define INCLUDE_xTaskGetSchedulerState                1
 #define INCLUDE_xTaskGetHandle                        1
 #define INCLUDE_xTaskGetCurrentTaskHandle             1
+#define INCLUDE_xTimerPendFunctionCall                1
 
 #define configUSE_TRACE_FACILITY                      0
 #define configUSE_STATS_FORMATTING_FUNCTIONS          0

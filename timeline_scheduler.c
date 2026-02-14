@@ -17,6 +17,7 @@ typedef struct TimelineSchedulerState {
     BaseType_t xStarted;
     BaseType_t xConfigValid;
     BaseType_t xFrameResetPending;
+    BaseType_t xMaintenanceRequestPending;
     TickType_t xLastTickSeen;
     uint32_t ulFrameId;
     TimelineTaskContext_t xTaskContexts[TIMELINE_MAX_TASKS];
@@ -105,6 +106,9 @@ static void prvTimelineManagedTask(void * pvArg)
 static BaseType_t prvValidateConfig(const TimelineConfig_t * pxConfig)
 {
     uint32_t ulIdx;
+    TickType_t xMajorFrameTicks;
+    TickType_t xSubframeTicks;
+    uint32_t ulSubframeCount;
 
     if ((pxConfig == NULL) || (pxConfig->pxTasks == NULL) || (pxConfig->ulTaskCount == 0U)) {
         return pdFALSE;
@@ -115,6 +119,14 @@ static BaseType_t prvValidateConfig(const TimelineConfig_t * pxConfig)
         return pdFALSE;
     }
 
+    xMajorFrameTicks = pdMS_TO_TICKS(pxConfig->ulMajorFrameMs);
+    xSubframeTicks = pdMS_TO_TICKS(pxConfig->ulSubframeMs);
+    if ((xMajorFrameTicks == 0U) || (xSubframeTicks == 0U) ||
+        ((xMajorFrameTicks % xSubframeTicks) != 0U)) {
+        return pdFALSE;
+    }
+
+    ulSubframeCount = (uint32_t) (xMajorFrameTicks / xSubframeTicks);
     for (ulIdx = 0U; ulIdx < pxConfig->ulTaskCount; ulIdx++) {
         const TimelineTaskConfig_t * pxTask = &pxConfig->pxTasks[ulIdx];
         if ((pxTask->pcName == NULL) || (pxTask->pxTaskCode == NULL)) {
@@ -122,32 +134,63 @@ static BaseType_t prvValidateConfig(const TimelineConfig_t * pxConfig)
         }
 
         if (pxTask->xType == TIMELINE_TASK_HRT) {
-            if ((pxTask->ulEndOffsetMs <= pxTask->ulStartOffsetMs) ||
-                (pxTask->ulEndOffsetMs > pxConfig->ulSubframeMs)) {
+            const TickType_t xStartTick = pdMS_TO_TICKS(pxTask->ulStartOffsetMs);
+            const TickType_t xEndTick = pdMS_TO_TICKS(pxTask->ulEndOffsetMs);
+
+            if (pxTask->ulSubframeId >= ulSubframeCount) {
+                return pdFALSE;
+            }
+
+            if ((xEndTick <= xStartTick) || (xEndTick > xSubframeTicks)) {
                 return pdFALSE;
             }
         }
     }
 
-    /* Verifica che gli SRT siano ordinati compatti nell'array per garantire ordine fisso */
+    for (ulIdx = 0U; ulIdx < pxConfig->ulTaskCount; ulIdx++) {
+        const TimelineTaskConfig_t * pxTaskA = &pxConfig->pxTasks[ulIdx];
+        uint32_t ulProbe;
+
+        if (pxTaskA->xType != TIMELINE_TASK_HRT) {
+            continue;
+        }
+
+        for (ulProbe = ulIdx + 1U; ulProbe < pxConfig->ulTaskCount; ulProbe++) {
+            const TimelineTaskConfig_t * pxTaskB = &pxConfig->pxTasks[ulProbe];
+
+            if (pxTaskB->xType != TIMELINE_TASK_HRT) {
+                continue;
+            }
+
+            if (pxTaskA->ulSubframeId == pxTaskB->ulSubframeId) {
+                const TickType_t xAStart = pdMS_TO_TICKS(pxTaskA->ulStartOffsetMs);
+                const TickType_t xAEnd = pdMS_TO_TICKS(pxTaskA->ulEndOffsetMs);
+                const TickType_t xBStart = pdMS_TO_TICKS(pxTaskB->ulStartOffsetMs);
+                const TickType_t xBEnd = pdMS_TO_TICKS(pxTaskB->ulEndOffsetMs);
+
+                if ((xAStart < xBEnd) && (xBStart < xAEnd)) {
+                    return pdFALSE;
+                }
+            }
+        }
+    }
+
+    /* SRT tasks must remain compact and ordered after all HRT entries. */
     {
         BaseType_t xFoundFirstSrt = pdFALSE;
         BaseType_t xFoundHrtAfterSrt = pdFALSE;
-        
+
         for (ulIdx = 0U; ulIdx < pxConfig->ulTaskCount; ulIdx++) {
             const TimelineTaskConfig_t * pxTask = &pxConfig->pxTasks[ulIdx];
-            
+
             if (pxTask->xType == TIMELINE_TASK_SRT) {
                 xFoundFirstSrt = pdTRUE;
-            }
-            else if ((pxTask->xType == TIMELINE_TASK_HRT) && (xFoundFirstSrt != pdFALSE)) {
-                /* HRT trovato dopo che abbiamo gia' visto un SRT! Ordine mischiato */
+            } else if ((pxTask->xType == TIMELINE_TASK_HRT) && (xFoundFirstSrt != pdFALSE)) {
                 xFoundHrtAfterSrt = pdTRUE;
             }
         }
-        
+
         if (xFoundHrtAfterSrt != pdFALSE) {
-            /* Configurazione non valida: gli SRT devono essere dopo gli HRT per ordine */
             return pdFALSE;
         }
     }
@@ -163,7 +206,6 @@ static void prvResetFrameRuntimeState(void)
     for (ulIdx = 0U; ulIdx < xTimeline.pxConfig->ulTaskCount; ulIdx++) {
         xTimeline.xRuntime[ulIdx].xIsActive = pdFALSE;
         xTimeline.xRuntime[ulIdx].xCompletedInWindow = pdFALSE;
-        xTimeline.xRuntime[ulIdx].xDeadlineMissPendingKill = pdFALSE;
     }
 }
 
@@ -246,6 +288,114 @@ static void prvProcessPendingKillsAndRecreate(void)
     }
 }
 
+static BaseType_t prvAnyPendingMaintenanceFromISR(void)
+{
+    uint32_t ulIdx;
+
+    if ((xTimeline.xConfigValid == pdFALSE) || (xTimeline.pxConfig == NULL)) {
+        return pdFALSE;
+    }
+
+    for (ulIdx = 0U; ulIdx < xTimeline.pxConfig->ulTaskCount; ulIdx++) {
+        if ((xTimeline.xRuntime[ulIdx].xDeadlineMissPendingKill != pdFALSE) &&
+            (xTimeline.xRuntime[ulIdx].xHandle != NULL)) {
+            return pdTRUE;
+        }
+    }
+
+    return pdFALSE;
+}
+
+static void prvMarkFrameBoundaryCarryOverFromISR(uint32_t ulCurrentSubframe)
+{
+    uint32_t ulIdx;
+
+    if ((xTimeline.xConfigValid == pdFALSE) || (xTimeline.pxConfig == NULL)) {
+        return;
+    }
+
+    for (ulIdx = 0U; ulIdx < xTimeline.pxConfig->ulTaskCount; ulIdx++) {
+        const TimelineTaskConfig_t * pxTask = &xTimeline.pxConfig->pxTasks[ulIdx];
+        TimelineTaskRuntime_t * pxRt = &xTimeline.xRuntime[ulIdx];
+
+        if ((pxRt->xHandle == NULL) ||
+            (pxRt->xIsActive == pdFALSE) ||
+            (pxRt->xCompletedInWindow != pdFALSE) ||
+            (pxRt->xDeadlineMissPendingKill != pdFALSE)) {
+            continue;
+        }
+
+        pxRt->xDeadlineMissPendingKill = pdTRUE;
+        pxRt->xIsActive = pdFALSE;
+
+        if (pxTask->xType == TIMELINE_TASK_HRT) {
+            pxRt->ulDeadlineMissCount++;
+            prvTracePushFromISR(TIMELINE_TRACE_EVT_DEADLINE_MISS, (UBaseType_t) ulIdx, ulCurrentSubframe);
+        }
+    }
+}
+
+static void prvTimelineMaintenanceCallback(void * pvUnusedParam1, uint32_t ulUnusedParam2)
+{
+    (void) pvUnusedParam1;
+    (void) ulUnusedParam2;
+
+    xTimeline.xMaintenanceRequestPending = pdFALSE;
+    prvProcessPendingKillsAndRecreate();
+}
+
+static void prvReleaseFrameStartTasksFromTaskContext(void)
+{
+    uint32_t ulIdx;
+    BaseType_t xAnyHrtActive = pdFALSE;
+
+    if ((xTimeline.xConfigValid == pdFALSE) || (xTimeline.pxConfig == NULL)) {
+        return;
+    }
+
+    /* The first frame starts exactly at xFrameStartTick, so tasks configured
+     * at subframe 0 / offset 0 must be released immediately. */
+    for (ulIdx = 0U; ulIdx < xTimeline.pxConfig->ulTaskCount; ulIdx++) {
+        const TimelineTaskConfig_t * pxTask = &xTimeline.pxConfig->pxTasks[ulIdx];
+        TimelineTaskRuntime_t * pxRt = &xTimeline.xRuntime[ulIdx];
+
+        if ((pxTask->xType == TIMELINE_TASK_HRT) &&
+            (pxTask->ulSubframeId == 0U) &&
+            (pdMS_TO_TICKS(pxTask->ulStartOffsetMs) == 0U) &&
+            (pxRt->xHandle != NULL) &&
+            (pxRt->xDeadlineMissPendingKill == pdFALSE)) {
+            pxRt->xIsActive = pdTRUE;
+            pxRt->xCompletedInWindow = pdFALSE;
+            pxRt->ulReleaseCount++;
+            xTaskNotifyGive(pxRt->xHandle);
+            vTaskResume(pxRt->xHandle);
+            prvTracePushFromTask(TIMELINE_TRACE_EVT_HRT_RELEASE, (UBaseType_t) ulIdx, 0U);
+            xAnyHrtActive = pdTRUE;
+        }
+    }
+
+    /* If no HRT is active at frame start, release first SRT immediately. */
+    if (xAnyHrtActive == pdFALSE) {
+        for (ulIdx = 0U; ulIdx < xTimeline.pxConfig->ulTaskCount; ulIdx++) {
+            const TimelineTaskConfig_t * pxTask = &xTimeline.pxConfig->pxTasks[ulIdx];
+            TimelineTaskRuntime_t * pxRt = &xTimeline.xRuntime[ulIdx];
+
+            if ((pxTask->xType == TIMELINE_TASK_SRT) &&
+                (pxRt->xHandle != NULL) &&
+                (pxRt->xIsActive == pdFALSE) &&
+                (pxRt->xDeadlineMissPendingKill == pdFALSE) &&
+                (pxRt->xCompletedInWindow == pdFALSE)) {
+                pxRt->xIsActive = pdTRUE;
+                pxRt->ulReleaseCount++;
+                xTaskNotifyGive(pxRt->xHandle);
+                vTaskResume(pxRt->xHandle);
+                prvTracePushFromTask(TIMELINE_TRACE_EVT_SRT_RELEASE, (UBaseType_t) ulIdx, 0U);
+                break;
+            }
+        }
+    }
+}
+
 BaseType_t xTimelineSchedulerConfigure(const TimelineConfig_t * pxConfig)
 {
     uint32_t ulIdx;
@@ -260,6 +410,7 @@ BaseType_t xTimelineSchedulerConfigure(const TimelineConfig_t * pxConfig)
     xTimeline.xStarted = pdFALSE;
     xTimeline.xConfigValid = pdTRUE;
     xTimeline.xFrameResetPending = pdFALSE;
+    xTimeline.xMaintenanceRequestPending = pdFALSE;
     xTimeline.xLastTickSeen = 0;
     xTimeline.ulFrameId = 0U;
     xTrace.ulHead = 0U;
@@ -301,9 +452,11 @@ void vTimelineSchedulerKernelStart(TickType_t xStartTick)
     xTimeline.xFrameStartTick = xStartTick;
     xTimeline.xLastTickSeen = xStartTick;
     xTimeline.xStarted = pdTRUE;
+    xTimeline.xMaintenanceRequestPending = pdFALSE;
     xTimeline.ulFrameId = 0U;
     prvResetFrameRuntimeState();
     prvTracePushFromTask(TIMELINE_TRACE_EVT_FRAME_START, 0U, 0U);
+    prvReleaseFrameStartTasksFromTaskContext();
 }
 
 void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherPriorityTaskWoken)
@@ -320,11 +473,13 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
 
     xTimeline.xLastTickSeen = xNowTick;
     xTicksFromFrame = xNowTick - xTimeline.xFrameStartTick;
+    ulCurrentSubframe = (uint32_t) (xTicksFromFrame / xTimeline.xSubframeTicks);
 
     if (xTicksFromFrame >= xTimeline.xMajorFrameTicks) {
+        prvMarkFrameBoundaryCarryOverFromISR(ulCurrentSubframe);
         xTimeline.xFrameStartTick = xNowTick;
         xTimeline.xFrameResetPending = pdTRUE;
-        xTicksFromFrame = 0;
+        xTicksFromFrame = 0U;
         xTimeline.ulFrameId++;
         prvResetFrameRuntimeState();
         prvTracePushFromISR(TIMELINE_TRACE_EVT_FRAME_START, 0U, 0U);
@@ -340,7 +495,8 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
         if ((pxTask->xType == TIMELINE_TASK_HRT) &&
             (pxTask->ulSubframeId == ulCurrentSubframe) &&
             (xTickInSubframe == pdMS_TO_TICKS(pxTask->ulStartOffsetMs)) &&
-            (pxRt->xHandle != NULL)) {
+            (pxRt->xHandle != NULL) &&
+            (pxRt->xDeadlineMissPendingKill == pdFALSE)) {
             pxRt->xIsActive = pdTRUE;
             pxRt->xCompletedInWindow = pdFALSE;
             pxRt->ulReleaseCount++;
@@ -351,7 +507,9 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
 
         if ((pxTask->xType == TIMELINE_TASK_HRT) && (pxRt->xIsActive != pdFALSE) &&
             (pxRt->xCompletedInWindow == pdFALSE) &&
-            (xTickInSubframe >= pdMS_TO_TICKS(pxTask->ulEndOffsetMs))) {
+            (pxRt->xDeadlineMissPendingKill == pdFALSE) &&
+            ((ulCurrentSubframe != pxTask->ulSubframeId) ||
+             (xTickInSubframe >= pdMS_TO_TICKS(pxTask->ulEndOffsetMs)))) {
             pxRt->xDeadlineMissPendingKill = pdTRUE;
             pxRt->ulDeadlineMissCount++;
             pxRt->xIsActive = pdFALSE;
@@ -359,7 +517,8 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
         }
 
         if ((pxTask->xType == TIMELINE_TASK_SRT) && (pxRt->xHandle != NULL) &&
-            (pxRt->xIsActive == pdFALSE)) {
+            (pxRt->xIsActive == pdFALSE) &&
+            (pxRt->xDeadlineMissPendingKill == pdFALSE)) {
             BaseType_t xNoHrtActive = pdTRUE;
             uint32_t ulProbe;
 
@@ -385,6 +544,19 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
             }
         }
     }
+
+    if ((xTimeline.xMaintenanceRequestPending == pdFALSE) &&
+        (prvAnyPendingMaintenanceFromISR() != pdFALSE)) {
+        BaseType_t xTimerTaskWoken = pdFALSE;
+
+        if (xTimerPendFunctionCallFromISR(prvTimelineMaintenanceCallback, NULL, 0U, &xTimerTaskWoken) == pdPASS) {
+            xTimeline.xMaintenanceRequestPending = pdTRUE;
+
+            if ((pxHigherPriorityTaskWoken != NULL) && (xTimerTaskWoken != pdFALSE)) {
+                *pxHigherPriorityTaskWoken = pdTRUE;
+            }
+        }
+    }
 }
 
 TaskHandle_t xTimelineSchedulerSelectNextTask(TaskHandle_t xDefaultSelected, TickType_t xNowTick)
@@ -399,8 +571,6 @@ TaskHandle_t xTimelineSchedulerSelectNextTask(TaskHandle_t xDefaultSelected, Tic
     if ((xTimeline.xStarted == pdFALSE) || (xTimeline.pxConfig == NULL)) {
         return xDefaultSelected;
     }
-
-    prvProcessPendingKillsAndRecreate();
 
     if (xTimeline.xFrameResetPending != pdFALSE) {
         xTimeline.xFrameResetPending = pdFALSE;
@@ -419,6 +589,7 @@ TaskHandle_t xTimelineSchedulerSelectNextTask(TaskHandle_t xDefaultSelected, Tic
             (xTickInSubframe >= pdMS_TO_TICKS(pxTask->ulStartOffsetMs)) &&
             (xTickInSubframe < pdMS_TO_TICKS(pxTask->ulEndOffsetMs)) &&
             (pxRt->xHandle != NULL) &&
+            (pxRt->xIsActive != pdFALSE) &&
             (pxRt->xCompletedInWindow == pdFALSE) &&
             (pxRt->xDeadlineMissPendingKill == pdFALSE)) {
             return pxRt->xHandle;
@@ -430,6 +601,8 @@ TaskHandle_t xTimelineSchedulerSelectNextTask(TaskHandle_t xDefaultSelected, Tic
         TimelineTaskRuntime_t * pxRt = &xTimeline.xRuntime[ulIdx];
 
         if ((pxTask->xType == TIMELINE_TASK_SRT) && (pxRt->xHandle != NULL) &&
+            (pxRt->xIsActive != pdFALSE) &&
+            (pxRt->xDeadlineMissPendingKill == pdFALSE) &&
             (pxRt->xCompletedInWindow == pdFALSE)) {
             return pxRt->xHandle;
         }
@@ -440,28 +613,54 @@ TaskHandle_t xTimelineSchedulerSelectNextTask(TaskHandle_t xDefaultSelected, Tic
 
 void vTimelineSchedulerTaskCompletedFromTaskContext(UBaseType_t uxTaskIndex)
 {
+    BaseType_t xCanCountCompletion = pdFALSE;
+
     if ((xTimeline.pxConfig == NULL) || (uxTaskIndex >= xTimeline.pxConfig->ulTaskCount)) {
         return;
     }
 
     taskENTER_CRITICAL();
-    xTimeline.xRuntime[uxTaskIndex].xCompletedInWindow = pdTRUE;
+    if (xTimeline.xRuntime[uxTaskIndex].xDeadlineMissPendingKill == pdFALSE) {
+        xTimeline.xRuntime[uxTaskIndex].xCompletedInWindow = pdTRUE;
+        xTimeline.xRuntime[uxTaskIndex].ulCompletionCount++;
+        xCanCountCompletion = pdTRUE;
+    }
+
     xTimeline.xRuntime[uxTaskIndex].xIsActive = pdFALSE;
-    xTimeline.xRuntime[uxTaskIndex].ulCompletionCount++;
     taskEXIT_CRITICAL();
+
+    if (xCanCountCompletion == pdFALSE) {
+        return;
+    }
+
     prvTracePushFromTask(TIMELINE_TRACE_EVT_TASK_COMPLETE, uxTaskIndex, prvComputeCurrentSubframe());
 
     /* Immediately release the next SRT in fixed order (if any) so SRTs
      * execute sequentially within the available idle time of the subframe. */
     {
+        BaseType_t xNoHrtActive = pdTRUE;
         uint32_t ulIdx;
+
+        for (ulIdx = 0U; ulIdx < xTimeline.pxConfig->ulTaskCount; ulIdx++) {
+            if ((xTimeline.pxConfig->pxTasks[ulIdx].xType == TIMELINE_TASK_HRT) &&
+                (xTimeline.xRuntime[ulIdx].xIsActive != pdFALSE)) {
+                xNoHrtActive = pdFALSE;
+                break;
+            }
+        }
+
+        if (xNoHrtActive == pdFALSE) {
+            return;
+        }
 
         for (ulIdx = 0U; ulIdx < xTimeline.pxConfig->ulTaskCount; ulIdx++) {
             const TimelineTaskConfig_t * pxTask = &xTimeline.pxConfig->pxTasks[ulIdx];
             TimelineTaskRuntime_t * pxRt = &xTimeline.xRuntime[ulIdx];
 
             if ((pxTask->xType == TIMELINE_TASK_SRT) && (pxRt->xHandle != NULL) &&
-                (pxRt->xIsActive == pdFALSE) && (pxRt->xCompletedInWindow == pdFALSE)) {
+                (pxRt->xIsActive == pdFALSE) &&
+                (pxRt->xDeadlineMissPendingKill == pdFALSE) &&
+                (pxRt->xCompletedInWindow == pdFALSE)) {
                 /* Mark active and release from task context. */
                 taskENTER_CRITICAL();
                 pxRt->xIsActive = pdTRUE;

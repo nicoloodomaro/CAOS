@@ -10,7 +10,6 @@
 #define UART0_CTRL       ( *( ( volatile uint32_t * ) ( UART0_ADDRESS + 8UL ) ) )
 #define UART0_BAUDDIV    ( *( ( volatile uint32_t * ) ( UART0_ADDRESS + 16UL ) ) )
 
-static void prvHeartbeatTask( void * pvArg );
 static void prvTimelineMonitorTask( void * pvArg );
 static void prvUARTInit( void );
 
@@ -18,13 +17,6 @@ int main( void )
 {
     prvUARTInit();
 
-    /* A visible task to prove the scheduler is alive together with timeline tasks. */
-    ( void ) xTaskCreate( prvHeartbeatTask,
-                          "HB",
-                          configMINIMAL_STACK_SIZE * 2U,
-                          NULL,
-                          tskIDLE_PRIORITY + 1U,
-                          NULL );
     ( void ) xTaskCreate( prvTimelineMonitorTask,
                           "TL_MON",
                           configMINIMAL_STACK_SIZE * 6U,
@@ -39,25 +31,11 @@ int main( void )
     }
 }
 
-static void prvHeartbeatTask( void * pvArg )
-{
-    ( void ) pvArg;
-
-    for( ; ; )
-    {
-        printf( "[HB] tick=%u\r\n", ( unsigned int ) xTaskGetTickCount() );
-        vTaskDelay( pdMS_TO_TICKS( 1000U ) );
-    }
-}
-
 static void prvTimelineMonitorTask( void * pvArg )
 {
     static TimelineTraceEvent_t xEvents[64];
     static TimelineTraceEvent_t xFrameBuilderEvents[64];
     static TimelineTraceEvent_t xLastCompleteFrameEvents[64];
-    static uint32_t ulPrevCompletion[TIMELINE_MAX_TASKS];
-    static uint32_t ulPrevRelease[TIMELINE_MAX_TASKS];
-    static uint32_t ulPrevMiss[TIMELINE_MAX_TASKS];
     static uint32_t ulFrameBuilderId = 0xFFFFFFFFU;
     static uint32_t ulFrameBuilderCount = 0U;
     static uint32_t ulLastCompleteFrameId = 0xFFFFFFFFU;
@@ -65,14 +43,11 @@ static void prvTimelineMonitorTask( void * pvArg )
 
     ( void ) pvArg;
 
-    vTaskDelay( pdMS_TO_TICKS( 1200U ) );
+    vTaskDelay( pdMS_TO_TICKS( 100U ) );
 
     for( ; ; )
     {
         uint32_t ulEventCount;
-        uint32_t ulTaskCount = 0U;
-        const TimelineTaskRuntime_t * pxRt = pxTimelineSchedulerGetRuntime( &ulTaskCount );
-        uint32_t ulIdx;
         uint32_t ulEvtIdx;
 
         do
@@ -164,35 +139,7 @@ static void prvTimelineMonitorTask( void * pvArg )
             printf( "\r\n" );
         }
 
-        if( ( pxRt != NULL ) && ( ulTaskCount > 0U ) )
-        {
-            for( ulIdx = 0U; ( ulIdx < ulTaskCount ) && ( ulIdx < TIMELINE_MAX_TASKS ); ulIdx++ )
-            {
-                const TimelineTaskConfig_t * pxCfg = &gTimelineConfig.pxTasks[ ulIdx ];
-                uint32_t ulRelDelta = pxRt[ ulIdx ].ulReleaseCount - ulPrevRelease[ ulIdx ];
-                uint32_t ulCmpDelta = pxRt[ ulIdx ].ulCompletionCount - ulPrevCompletion[ ulIdx ];
-                uint32_t ulMissDelta = pxRt[ ulIdx ].ulDeadlineMissCount - ulPrevMiss[ ulIdx ];
-
-                if( ( ulRelDelta > 0U ) || ( ulCmpDelta > 0U ) || ( ulMissDelta > 0U ) )
-                {
-                    printf( "[TL] %s type=%s rel=%u(+%u) cmp=%u(+%u) miss=%u(+%u)\r\n",
-                            pxCfg->pcName,
-                            ( pxCfg->xType == TIMELINE_TASK_HRT ) ? "HRT" : "SRT",
-                            ( unsigned int ) pxRt[ ulIdx ].ulReleaseCount,
-                            ( unsigned int ) ulRelDelta,
-                            ( unsigned int ) pxRt[ ulIdx ].ulCompletionCount,
-                            ( unsigned int ) ulCmpDelta,
-                            ( unsigned int ) pxRt[ ulIdx ].ulDeadlineMissCount,
-                            ( unsigned int ) ulMissDelta );
-                }
-
-                ulPrevRelease[ ulIdx ] = pxRt[ ulIdx ].ulReleaseCount;
-                ulPrevCompletion[ ulIdx ] = pxRt[ ulIdx ].ulCompletionCount;
-                ulPrevMiss[ ulIdx ] = pxRt[ ulIdx ].ulDeadlineMissCount;
-            }
-        }
-
-        vTaskDelay( pdMS_TO_TICKS( 1000U ) );
+        vTaskDelay( pdMS_TO_TICKS( 100U ) );
     }
 }
 

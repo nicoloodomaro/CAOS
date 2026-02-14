@@ -2,8 +2,6 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-#include <stdio.h>
-
 static void vBusyWaitMs(uint32_t ulDurationMs)
 {
     TickType_t xStartTick = xTaskGetTickCount();
@@ -16,59 +14,35 @@ static void vBusyWaitMs(uint32_t ulDurationMs)
 static void vHrtSenseTask(void * pvArg)
 {
     (void) pvArg;
-    printf("[TASK] HRT_A start tick=%u\r\n", (unsigned int) xTaskGetTickCount());
     vBusyWaitMs(1U);
-    printf("[TASK] HRT_A end   tick=%u\r\n", (unsigned int) xTaskGetTickCount());
 }
 
 static void vHrtControlTask(void * pvArg)
 {
     (void) pvArg;
-    printf("[TASK] HRT_B start tick=%u\r\n", (unsigned int) xTaskGetTickCount());
     vBusyWaitMs(1U);
-    printf("[TASK] HRT_B end   tick=%u\r\n", (unsigned int) xTaskGetTickCount());
 }
 
 static void vHrtActuationTask(void * pvArg)
 {
-    
     (void) pvArg;
-    printf("[TASK] HRT_C(start, will miss) tick=%u\r\n", (unsigned int) xTaskGetTickCount());
     vBusyWaitMs(4U);
-    printf("[TASK] HRT_C end(unexpected if killed) tick=%u\r\n", (unsigned int) xTaskGetTickCount());
 }
 
 static void vSrtLongTask(void * pvArg)
 {
-    TickType_t xStart;
-    TickType_t xLastPrint;
-
     (void) pvArg;
-    xStart = xTaskGetTickCount();
-    xLastPrint = xStart;
-    printf("[TASK] SRT_LONG start tick=%u\r\n", (unsigned int) xStart);
-
-    while ((xTaskGetTickCount() - xStart) < pdMS_TO_TICKS(6U)) {
-        TickType_t xNow = xTaskGetTickCount();
-        if (xNow != xLastPrint) {
-            xLastPrint = xNow;
-            printf("[TASK] SRT_LONG run   tick=%u\r\n", (unsigned int) xNow);
-        }
-    }
-
-    printf("[TASK] SRT_LONG end   tick=%u\r\n", (unsigned int) xTaskGetTickCount());
+    vBusyWaitMs(6U);
 }
 
 static void vSrtLoggerTask(void * pvArg)
 {
     (void) pvArg;
-    printf("[TASK] SRT_LOG  tick=%u\r\n", (unsigned int) xTaskGetTickCount());
 }
 
 static void vSrtDiagTask(void * pvArg)
 {
     (void) pvArg;
-    printf("[TASK] SRT_DIAG tick=%u\r\n", (unsigned int) xTaskGetTickCount());
 }
 
 static const TimelineTaskConfig_t xTasks[] = {
