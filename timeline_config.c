@@ -31,6 +31,7 @@ static void vHrtControlTask(void * pvArg)
 
 static void vHrtActuationTask(void * pvArg)
 {
+    
     (void) pvArg;
     printf("[TASK] HRT_C(start, will miss) tick=%u\r\n", (unsigned int) xTaskGetTickCount());
     vBusyWaitMs(4U);
