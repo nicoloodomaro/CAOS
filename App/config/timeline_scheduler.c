@@ -509,7 +509,7 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
             (pxRt->xCompletedInWindow == pdFALSE) &&
             (pxRt->xDeadlineMissPendingKill == pdFALSE) &&
             ((ulCurrentSubframe != pxTask->ulSubframeId) ||
-             (xTickInSubframe >= pdMS_TO_TICKS(pxTask->ulEndOffsetMs)))) {
+            (xTickInSubframe >= pdMS_TO_TICKS(pxTask->ulEndOffsetMs)))) { // > e non >= per consentire completamento al tick di deadline
             pxRt->xDeadlineMissPendingKill = pdTRUE;
             pxRt->ulDeadlineMissCount++;
             pxRt->xIsActive = pdFALSE;
@@ -587,7 +587,7 @@ TaskHandle_t xTimelineSchedulerSelectNextTask(TaskHandle_t xDefaultSelected, Tic
         if ((pxTask->xType == TIMELINE_TASK_HRT) &&
             (pxTask->ulSubframeId == ulCurrentSubframe) &&
             (xTickInSubframe >= pdMS_TO_TICKS(pxTask->ulStartOffsetMs)) &&
-            (xTickInSubframe < pdMS_TO_TICKS(pxTask->ulEndOffsetMs)) &&
+            (xTickInSubframe < pdMS_TO_TICKS(pxTask->ulEndOffsetMs)) && // <= per consentire selezione al tick di deadline
             (pxRt->xHandle != NULL) &&
             (pxRt->xIsActive != pdFALSE) &&
             (pxRt->xCompletedInWindow == pdFALSE) &&

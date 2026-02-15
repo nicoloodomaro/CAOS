@@ -2,20 +2,13 @@
 #include "task.h"
 #include "timeline_config.h"
 #include "timeline_scheduler.h"
-
-#include <stdint.h>
-#include <stdio.h>
-
-#define UART0_ADDRESS    ( 0x40004000UL )
-#define UART0_CTRL       ( *( ( volatile uint32_t * ) ( UART0_ADDRESS + 8UL ) ) )
-#define UART0_BAUDDIV    ( *( ( volatile uint32_t * ) ( UART0_ADDRESS + 16UL ) ) )
+#include "uart.h"
 
 static void prvTimelineMonitorTask( void * pvArg );
-static void prvUARTInit( void );
 
 int main( void )
 {
-    prvUARTInit();
+    UART_init();
 
     ( void ) xTaskCreate( prvTimelineMonitorTask,
                           "TL_MON",
@@ -88,65 +81,85 @@ static void prvTimelineMonitorTask( void * pvArg )
 
         if( ulLastCompleteFrameCount > 0U )
         {
-            uint32_t ulSfPrinted = 0xFFFFFFFFU;
-            printf( "[TL-SEQ] frame=%u", ( unsigned int ) ulLastCompleteFrameId );
-            for( ulEvtIdx = 0U; ulEvtIdx < ulLastCompleteFrameCount; ulEvtIdx++ )
+            uint32_t ulSubframeCount = 0U;
+            uint32_t ulSfIdx;
+
+            if( ( gTimelineConfig.ulSubframeMs > 0U ) &&
+                ( gTimelineConfig.ulMajorFrameMs >= gTimelineConfig.ulSubframeMs ) )
             {
-                const TimelineTraceEvent_t * pxEvt = &xLastCompleteFrameEvents[ulEvtIdx];
-                const char * pcTaskName = "-";
-                char cEvent = '?';
+                ulSubframeCount = gTimelineConfig.ulMajorFrameMs / gTimelineConfig.ulSubframeMs;
+            }
 
-                if( ( gTimelineConfig.pxTasks != NULL ) && ( pxEvt->uxTaskIndex < gTimelineConfig.ulTaskCount ) )
+            UART_puts( "[TL-SEQ] frame=" );
+            UART_put_u32( ulLastCompleteFrameId );
+
+            for( ulSfIdx = 0U; ulSfIdx < ulSubframeCount; ulSfIdx++ )
+            {
+                BaseType_t xHasTaskInSubframe = pdFALSE;
+
+                UART_puts( " | sf" );
+                UART_put_u32( ulSfIdx );
+                UART_putc( ':' );
+
+                for( ulEvtIdx = 0U; ulEvtIdx < ulLastCompleteFrameCount; ulEvtIdx++ )
                 {
-                    pcTaskName = gTimelineConfig.pxTasks[pxEvt->uxTaskIndex].pcName;
+                    const TimelineTraceEvent_t * pxEvt = &xLastCompleteFrameEvents[ulEvtIdx];
+                    const char * pcTaskName = "-";
+                    char cEvent = '?';
+
+                    if( pxEvt->ulSubframeId != ulSfIdx )
+                    {
+                        continue;
+                    }
+
+                    if( ( gTimelineConfig.pxTasks != NULL ) && ( pxEvt->uxTaskIndex < gTimelineConfig.ulTaskCount ) )
+                    {
+                        pcTaskName = gTimelineConfig.pxTasks[pxEvt->uxTaskIndex].pcName;
+                    }
+
+                    switch( pxEvt->xType )
+                    {
+                        case TIMELINE_TRACE_EVT_FRAME_START:
+                            cEvent = 'F';
+                            break;
+                        case TIMELINE_TRACE_EVT_HRT_RELEASE:
+                        case TIMELINE_TRACE_EVT_SRT_RELEASE:
+                            cEvent = 'R';
+                            break;
+                        case TIMELINE_TRACE_EVT_TASK_COMPLETE:
+                            cEvent = 'C';
+                            break;
+                        case TIMELINE_TRACE_EVT_DEADLINE_MISS:
+                            cEvent = 'M';
+                            break;
+                        default:
+                            cEvent = '?';
+                            break;
+                    }
+
+                    if( pxEvt->xType == TIMELINE_TRACE_EVT_FRAME_START )
+                    {
+                        UART_puts( " F" );
+                    }
+                    else
+                    {
+                        UART_put_task_event( pcTaskName, cEvent );
+                    }
+
+                    xHasTaskInSubframe = pdTRUE;
                 }
 
-                if( pxEvt->ulSubframeId != ulSfPrinted )
+                if( xHasTaskInSubframe == pdFALSE )
                 {
-                    ulSfPrinted = pxEvt->ulSubframeId;
-                    printf( " | sf%u:", ( unsigned int ) ulSfPrinted );
-                }
-
-                switch( pxEvt->xType )
-                {
-                    case TIMELINE_TRACE_EVT_FRAME_START:
-                        cEvent = 'F';
-                        break;
-                    case TIMELINE_TRACE_EVT_HRT_RELEASE:
-                    case TIMELINE_TRACE_EVT_SRT_RELEASE:
-                        cEvent = 'R';
-                        break;
-                    case TIMELINE_TRACE_EVT_TASK_COMPLETE:
-                        cEvent = 'C';
-                        break;
-                    case TIMELINE_TRACE_EVT_DEADLINE_MISS:
-                        cEvent = 'M';
-                        break;
-                    default:
-                        cEvent = '?';
-                        break;
-                }
-
-                if( pxEvt->xType == TIMELINE_TRACE_EVT_FRAME_START )
-                {
-                    printf( " F");
-                }
-                else
-                {
-                    printf( " %s:%c", pcTaskName, cEvent );
+                    UART_puts( " no task in subframe" );
+                    UART_put_u32( ulSfIdx );
                 }
             }
-            printf( "\r\n" );
+            UART_puts( "\r\n" );
         }
 
         vTaskDelay( pdMS_TO_TICKS( 100U ) );
     }
-}
-
-static void prvUARTInit( void )
-{
-    UART0_BAUDDIV = ( ( configCPU_CLOCK_HZ / 38400U ) - 1U );
-    UART0_CTRL = 1U;
 }
 
 void vApplicationMallocFailedHook( void )

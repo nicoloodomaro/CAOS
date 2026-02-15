@@ -55,19 +55,19 @@ static const TimelineTaskConfig_t xTasks[] = {
      *    - sf1: HRT_C window t=1..3ms, but task body takes 4ms.
      *      It should be flagged as deadline miss and killed/recreated.
      */
-    { "HRT_A",     vHrtSenseTask,     TIMELINE_TASK_HRT, 0U, 0U, 1U, tskIDLE_PRIORITY + 4U, 256U },
-    { "HRT_B",     vHrtControlTask,   TIMELINE_TASK_HRT, 0U, 3U, 4U, tskIDLE_PRIORITY + 4U, 256U },
-    { "HRT_C",     vHrtActuationTask, TIMELINE_TASK_HRT, 1U, 1U, 3U, tskIDLE_PRIORITY + 4U, 256U },
+    { "HRT_A",     vHrtSenseTask,     TIMELINE_TASK_HRT, 0U, 5U, 15U, tskIDLE_PRIORITY + 4U, 256U },
+    { "HRT_B",     vHrtControlTask,   TIMELINE_TASK_HRT, 1U, 5U, 20U, tskIDLE_PRIORITY + 4U, 256U },
+    { "HRT_C",     vHrtActuationTask, TIMELINE_TASK_HRT, 3U, 5U, 15U, tskIDLE_PRIORITY + 4U, 256U },
 
     /* SRT fixed compile-time order. Timing fields are placeholders for SRT in current scheduler. */
     { "SRT_LONG",  vSrtLongTask,      TIMELINE_TASK_SRT, 0U, 0U, 0U, tskIDLE_PRIORITY + 1U, 256U },
-    { "SRT_LOG",   vSrtLoggerTask,    TIMELINE_TASK_SRT, 0U, 0U, 0U, tskIDLE_PRIORITY + 1U, 256U },
-    { "SRT_DIAG",  vSrtDiagTask,      TIMELINE_TASK_SRT, 0U, 0U, 0U, tskIDLE_PRIORITY + 1U, 256U }
+    { "SRT_LOG",   vSrtLoggerTask,    TIMELINE_TASK_SRT, 0U, 0U, 0U, tskIDLE_PRIORITY + 1U, 256U }
+    //{ "SRT_DIAG",  vSrtDiagTask,      TIMELINE_TASK_SRT, 0U, 0U, 0U, tskIDLE_PRIORITY + 1U, 256U }
 };
 
 const TimelineConfig_t gTimelineConfig = {
-    .ulMajorFrameMs = 10U,
-    .ulSubframeMs = 5U,
+    .ulMajorFrameMs = 100U,
+    .ulSubframeMs = 25U,
     .pxTasks = xTasks,
     .ulTaskCount = (uint32_t) (sizeof(xTasks) / sizeof(xTasks[0]))
 };
