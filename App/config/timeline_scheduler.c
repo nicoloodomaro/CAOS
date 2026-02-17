@@ -525,11 +525,16 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
             (xTickInSubframe == pdMS_TO_TICKS(pxTask->ulStartOffsetMs)) &&
             (pxRt->xHandle != NULL) &&
             (pxRt->xDeadlineMissPendingKill == pdFALSE)) {
+            BaseType_t xResumeHigherPriorityTaskWoken = pdFALSE;
+
             pxRt->xIsActive = pdTRUE;
             pxRt->xCompletedInWindow = pdFALSE;
             pxRt->ulReleaseCount++;
             vTaskNotifyGiveFromISR(pxRt->xHandle, pxHigherPriorityTaskWoken);
-            (void) xTaskResumeFromISR(pxRt->xHandle);
+            xResumeHigherPriorityTaskWoken = xTaskResumeFromISR(pxRt->xHandle);
+            if ((pxHigherPriorityTaskWoken != NULL) && (xResumeHigherPriorityTaskWoken != pdFALSE)) {
+                *pxHigherPriorityTaskWoken = pdTRUE;
+            }
             prvTracePushFromISR(TIMELINE_TRACE_EVT_HRT_RELEASE, (UBaseType_t) ulIdx, ulCurrentSubframe);
         }
 
@@ -563,10 +568,15 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
              * when the preceding one completes. */
             if ((xNoHrtActive != pdFALSE) && (xSrtReleasedThisTick == pdFALSE) &&
                 (pxRt->xCompletedInWindow == pdFALSE)) {
+                BaseType_t xResumeHigherPriorityTaskWoken = pdFALSE;
+
                 pxRt->xIsActive = pdTRUE;
                 pxRt->ulReleaseCount++;
                 vTaskNotifyGiveFromISR(pxRt->xHandle, pxHigherPriorityTaskWoken);
-                (void) xTaskResumeFromISR(pxRt->xHandle);
+                xResumeHigherPriorityTaskWoken = xTaskResumeFromISR(pxRt->xHandle);
+                if ((pxHigherPriorityTaskWoken != NULL) && (xResumeHigherPriorityTaskWoken != pdFALSE)) {
+                    *pxHigherPriorityTaskWoken = pdTRUE;
+                }
                 xSrtReleasedThisTick = pdTRUE;
                 prvTracePushFromISR(TIMELINE_TRACE_EVT_SRT_RELEASE, (UBaseType_t) ulIdx, ulCurrentSubframe);
             }

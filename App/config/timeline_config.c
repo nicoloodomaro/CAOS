@@ -49,11 +49,12 @@ static const TimelineTaskConfig_t xTasks[] = {
     /*
      * TEST profile with two visible cases:
      * 1) Preemption SRT->HRT:
-     *    - sf0: HRT_A at t=0..1ms, then SRT_LONG starts.
-     *    - sf0: HRT_B at t=3..4ms preempts SRT_LONG.
+     *    - sf0: HRT_A release at t=5ms (window 5..15ms), preempting SRT work.
+     *    - sf1: HRT_B release at t=5ms in subframe 1 (window 5..20ms).
      * 2) HRT deadline miss:
-     *    - sf1: HRT_C window t=1..3ms, but task body takes 4ms.
-     *      It should be flagged as deadline miss and killed/recreated.
+     *    - In this current configuration HRT_C does NOT miss deadline
+     *      (window 5..15ms, body ~4ms). To force a miss, shrink end offset
+     *      or increase task execution time.
      */
     { "HRT_A",     vHrtSenseTask,     TIMELINE_TASK_HRT, 0U, 5U, 15U, tskIDLE_PRIORITY + 4U, 256U },
     { "HRT_B",     vHrtControlTask,   TIMELINE_TASK_HRT, 1U, 5U, 20U, tskIDLE_PRIORITY + 4U, 256U },

@@ -5,6 +5,13 @@
 #include "uart.h"
 
 static void prvTimelineMonitorTask( void * pvArg );
+static const char * prvEventTypeToText( TimelineTraceEventType_t xType );
+static const char * prvInferRunningTaskNameFromState( const BaseType_t * pxTaskActive,
+                                                      TickType_t xTickInFrame,
+                                                      uint32_t ulSubframeId );
+
+#define TL_MONITOR_READ_BATCH_EVENTS    64U
+#define TL_MONITOR_PENDING_EVENTS       256U
 
 int main( void )
 {
@@ -26,151 +33,386 @@ int main( void )
 
 static void prvTimelineMonitorTask( void * pvArg )
 {
-    static TimelineTraceEvent_t xEvents[64];
-    static TimelineTraceEvent_t xFrameBuilderEvents[64];
-    static TimelineTraceEvent_t xLastCompleteFrameEvents[64];
-    static uint32_t ulFrameBuilderId = 0xFFFFFFFFU;
-    static uint32_t ulFrameBuilderCount = 0U;
-    static uint32_t ulLastCompleteFrameId = 0xFFFFFFFFU;
-    static uint32_t ulLastCompleteFrameCount = 0U;
+    static TimelineTraceEvent_t xReadEvents[ TL_MONITOR_READ_BATCH_EVENTS ];
+    static TimelineTraceEvent_t xPendingEvents[ TL_MONITOR_PENDING_EVENTS ];
+    uint32_t ulPendingEventCount = 0U;
+    uint32_t ulDroppedEventCount = 0U;
+    BaseType_t xHasNextTick = pdFALSE;
+    TickType_t xNextTickToPrint = 0U;
+    uint32_t ulCurrentMajorFrameId = 0xFFFFFFFFU;
+    TickType_t xCurrentMajorFrameStartTick = 0U;
+    uint32_t ulLastPrintedMajorFrameId = 0xFFFFFFFFU;
+    uint32_t ulLastPrintedSubframeId = 0xFFFFFFFFU;
+    BaseType_t xSimTaskActive[ TIMELINE_MAX_TASKS ] = { 0 };
+    const TickType_t xMajorFrameTicks = pdMS_TO_TICKS( gTimelineConfig.ulMajorFrameMs );
+    const TickType_t xSubframeTicks = pdMS_TO_TICKS( gTimelineConfig.ulSubframeMs );
 
     ( void ) pvArg;
 
-    vTaskDelay( pdMS_TO_TICKS( 100U ) );
-    UART_puts( "[TL-LEGEND] F=frame-start R=release C=complete M=deadline-miss X=context-switch @tick=kernel-tick\r\n" );
+    UART_puts( "[TL-LEGEND] Release, Complete, DeadlineMiss, ContextSwitch, FrameStart\r\n" );
 
     for( ; ; )
     {
-        uint32_t ulEventCount;
+        TickType_t xNowTick;
+        TickType_t xTick;
+        uint32_t ulReadCount;
         uint32_t ulEvtIdx;
 
         do
         {
-            ulEventCount = ulTimelineSchedulerTraceRead( &xEvents[0], 64U );
-            for( ulEvtIdx = 0U; ulEvtIdx < ulEventCount; ulEvtIdx++ )
+            ulReadCount = ulTimelineSchedulerTraceRead( &xReadEvents[ 0 ], TL_MONITOR_READ_BATCH_EVENTS );
+            for( ulEvtIdx = 0U; ulEvtIdx < ulReadCount; ulEvtIdx++ )
             {
-                const TimelineTraceEvent_t * pxEvt = &xEvents[ulEvtIdx];
-
-                if( ulFrameBuilderId == 0xFFFFFFFFU )
+                if( ulPendingEventCount < TL_MONITOR_PENDING_EVENTS )
                 {
-                    ulFrameBuilderId = pxEvt->ulFrameId;
+                    xPendingEvents[ ulPendingEventCount ] = xReadEvents[ ulEvtIdx ];
+                    ulPendingEventCount++;
                 }
-
-                if( pxEvt->ulFrameId != ulFrameBuilderId )
+                else
                 {
-                    uint32_t ulCopyIdx;
-
-                    ulLastCompleteFrameId = ulFrameBuilderId;
-                    ulLastCompleteFrameCount = ulFrameBuilderCount;
-                    for( ulCopyIdx = 0U; ( ulCopyIdx < ulFrameBuilderCount ) && ( ulCopyIdx < 64U ); ulCopyIdx++ )
-                    {
-                        xLastCompleteFrameEvents[ulCopyIdx] = xFrameBuilderEvents[ulCopyIdx];
-                    }
-
-                    ulFrameBuilderId = pxEvt->ulFrameId;
-                    ulFrameBuilderCount = 0U;
-                }
-
-                if( ulFrameBuilderCount < 64U )
-                {
-                    xFrameBuilderEvents[ulFrameBuilderCount] = *pxEvt;
-                    ulFrameBuilderCount++;
+                    ulDroppedEventCount++;
                 }
             }
         }
-        while( ulEventCount > 0U );
+        while( ulReadCount == TL_MONITOR_READ_BATCH_EVENTS );
 
-        if( ulLastCompleteFrameCount > 0U )
+        if( ( xHasNextTick == pdFALSE ) && ( ulPendingEventCount > 0U ) )
         {
-            uint32_t ulSubframeCount = 0U;
-            uint32_t ulSfIdx;
+            xNextTickToPrint = xPendingEvents[ 0 ].xTick;
+            xHasNextTick = pdTRUE;
+        }
 
-            if( ( gTimelineConfig.ulSubframeMs > 0U ) &&
-                ( gTimelineConfig.ulMajorFrameMs >= gTimelineConfig.ulSubframeMs ) )
+        if( xHasNextTick == pdFALSE )
+        {
+            vTaskDelay( pdMS_TO_TICKS( 1U ) );
+            continue;
+        }
+
+        xNowTick = xTaskGetTickCount();
+
+        for( xTick = xNextTickToPrint; xTick <= xNowTick; xTick++ )
+        {
+            uint32_t ulTickEventCount = 0U;
+            TickType_t xTickInFrame = 0U;
+            uint32_t ulSubframeId = 0U;
+            BaseType_t xMajorFrameChanged = pdFALSE;
+            BaseType_t xSubframeChanged = pdFALSE;
+            const char * pcRunningTask = NULL;
+
+            while( ( ulTickEventCount < ulPendingEventCount ) &&
+                   ( xPendingEvents[ ulTickEventCount ].xTick == xTick ) )
             {
-                ulSubframeCount = gTimelineConfig.ulMajorFrameMs / gTimelineConfig.ulSubframeMs;
+                ulTickEventCount++;
             }
 
-            UART_puts( "[TL-SEQ] frame=" );
-            UART_put_u32( ulLastCompleteFrameId );
-
-            for( ulSfIdx = 0U; ulSfIdx < ulSubframeCount; ulSfIdx++ )
+            for( ulEvtIdx = 0U; ulEvtIdx < ulTickEventCount; ulEvtIdx++ )
             {
-                BaseType_t xHasTaskInSubframe = pdFALSE;
-
-                UART_puts( " | sf" );
-                UART_put_u32( ulSfIdx );
-                UART_putc( ':' );
-
-                for( ulEvtIdx = 0U; ulEvtIdx < ulLastCompleteFrameCount; ulEvtIdx++ )
+                if( xPendingEvents[ ulEvtIdx ].xType == TIMELINE_TRACE_EVT_FRAME_START )
                 {
-                    const TimelineTraceEvent_t * pxEvt = &xLastCompleteFrameEvents[ulEvtIdx];
-                    const char * pcTaskName = "-";
-                    char cEvent = '?';
+                    ulCurrentMajorFrameId = xPendingEvents[ ulEvtIdx ].ulFrameId;
+                    xCurrentMajorFrameStartTick = xPendingEvents[ ulEvtIdx ].xTick;
+                }
+            }
 
-                    if( pxEvt->ulSubframeId != ulSfIdx )
+            if( ( ulCurrentMajorFrameId == 0xFFFFFFFFU ) &&
+                ( ulTickEventCount > 0U ) )
+            {
+                TickType_t xEstimatedDeltaTicks = 0U;
+
+                ulCurrentMajorFrameId = xPendingEvents[ 0 ].ulFrameId;
+                if( xSubframeTicks > 0U )
+                {
+                    xEstimatedDeltaTicks = ( TickType_t ) xPendingEvents[ 0 ].ulSubframeId * xSubframeTicks;
+                }
+
+                if( xEstimatedDeltaTicks <= xTick )
+                {
+                    xCurrentMajorFrameStartTick = xTick - xEstimatedDeltaTicks;
+                }
+                else
+                {
+                    xCurrentMajorFrameStartTick = xTick;
+                }
+            }
+
+            if( ( ulCurrentMajorFrameId != 0xFFFFFFFFU ) &&
+                ( xMajorFrameTicks > 0U ) )
+            {
+                while( xTick >= ( xCurrentMajorFrameStartTick + xMajorFrameTicks ) )
+                {
+                    ulCurrentMajorFrameId++;
+                    xCurrentMajorFrameStartTick += xMajorFrameTicks;
+                }
+
+                xTickInFrame = xTick - xCurrentMajorFrameStartTick;
+            }
+
+            if( xSubframeTicks > 0U )
+            {
+                ulSubframeId = ( uint32_t ) ( xTickInFrame / xSubframeTicks );
+            }
+
+            if( ulCurrentMajorFrameId != ulLastPrintedMajorFrameId )
+            {
+                xMajorFrameChanged = pdTRUE;
+            }
+            if( ulSubframeId != ulLastPrintedSubframeId )
+            {
+                xSubframeChanged = pdTRUE;
+            }
+
+            UART_puts( "tick " );
+            UART_put_u32( ( uint32_t ) xTick );
+            UART_puts( "\r\n" );
+
+            UART_puts( "    major-frame = " );
+            if( ulCurrentMajorFrameId == 0xFFFFFFFFU )
+            {
+                UART_puts( "?" );
+            }
+            else
+            {
+                UART_put_u32( ulCurrentMajorFrameId );
+            }
+            UART_puts( "\r\n" );
+
+            UART_puts( "    subframe = " );
+            UART_put_u32( ulSubframeId );
+            UART_puts( "\r\n" );
+
+            if( ( xMajorFrameChanged != pdFALSE ) ||
+                ( xSubframeChanged != pdFALSE ) )
+            {
+                UART_puts( "    transition = " );
+                if( xMajorFrameChanged != pdFALSE )
+                {
+                    UART_puts( "major-frame change" );
+                }
+                else
+                {
+                    UART_puts( "subframe change" );
+                }
+                UART_puts( "\r\n" );
+            }
+
+            if( ulTickEventCount == 0U )
+            {
+                UART_puts( "    events: none\r\n" );
+            }
+            else
+            {
+                for( ulEvtIdx = 0U; ulEvtIdx < ulTickEventCount; ulEvtIdx++ )
+                {
+                    const TimelineTraceEvent_t * pxEvt = &xPendingEvents[ ulEvtIdx ];
+                    const char * pcTaskName = "-";
+                    UBaseType_t uxTaskIndex = pxEvt->uxTaskIndex;
+                    BaseType_t xTaskIndexValid = pdFALSE;
+
+                    if( uxTaskIndex < TIMELINE_MAX_TASKS )
+                    {
+                        xTaskIndexValid = pdTRUE;
+                    }
+
+                    UART_puts( "    " );
+                    if( pxEvt->xType == TIMELINE_TRACE_EVT_FRAME_START )
+                    {
+                        uint32_t ulResetIdx;
+
+                        for( ulResetIdx = 0U; ulResetIdx < TIMELINE_MAX_TASKS; ulResetIdx++ )
+                        {
+                            xSimTaskActive[ ulResetIdx ] = pdFALSE;
+                        }
+
+                        UART_puts( "FRAME_START\r\n" );
+                        continue;
+                    }
+
+                    if( ( gTimelineConfig.pxTasks != NULL ) &&
+                        ( pxEvt->uxTaskIndex < gTimelineConfig.ulTaskCount ) )
+                    {
+                        pcTaskName = gTimelineConfig.pxTasks[ pxEvt->uxTaskIndex ].pcName;
+                    }
+
+                    UART_puts( pcTaskName );
+                    UART_puts( " : " );
+                    UART_puts( prvEventTypeToText( pxEvt->xType ) );
+                    UART_puts( "\r\n" );
+
+                    if( xTaskIndexValid != pdFALSE )
+                    {
+                        if( ( pxEvt->xType == TIMELINE_TRACE_EVT_HRT_RELEASE ) ||
+                            ( pxEvt->xType == TIMELINE_TRACE_EVT_SRT_RELEASE ) )
+                        {
+                            xSimTaskActive[ uxTaskIndex ] = pdTRUE;
+                        }
+                        else if( ( pxEvt->xType == TIMELINE_TRACE_EVT_TASK_COMPLETE ) ||
+                                 ( pxEvt->xType == TIMELINE_TRACE_EVT_DEADLINE_MISS ) )
+                        {
+                            xSimTaskActive[ uxTaskIndex ] = pdFALSE;
+                        }
+                    }
+                }
+            }
+
+            pcRunningTask = prvInferRunningTaskNameFromState( &xSimTaskActive[ 0 ],
+                                                              xTickInFrame,
+                                                              ulSubframeId );
+
+            if( pcRunningTask == NULL )
+            {
+                const char * pcFirstActive = NULL;
+                uint32_t ulActiveIdx;
+
+                for( ulActiveIdx = 0U;
+                     ( ulActiveIdx < gTimelineConfig.ulTaskCount ) &&
+                     ( ulActiveIdx < TIMELINE_MAX_TASKS );
+                     ulActiveIdx++ )
+                {
+                    if( xSimTaskActive[ ulActiveIdx ] == pdFALSE )
                     {
                         continue;
                     }
 
-                    if( ( gTimelineConfig.pxTasks != NULL ) && ( pxEvt->uxTaskIndex < gTimelineConfig.ulTaskCount ) )
+                    if( ( gTimelineConfig.pxTasks != NULL ) &&
+                        ( gTimelineConfig.pxTasks[ ulActiveIdx ].pcName != NULL ) )
                     {
-                        pcTaskName = gTimelineConfig.pxTasks[pxEvt->uxTaskIndex].pcName;
+                        pcFirstActive = gTimelineConfig.pxTasks[ ulActiveIdx ].pcName;
+                        break;
                     }
-
-                    switch( pxEvt->xType )
-                    {
-                        case TIMELINE_TRACE_EVT_FRAME_START:
-                            cEvent = 'F';
-                            break;
-                        case TIMELINE_TRACE_EVT_HRT_RELEASE:
-                        case TIMELINE_TRACE_EVT_SRT_RELEASE:
-                            cEvent = 'R';
-                            break;
-                        case TIMELINE_TRACE_EVT_TASK_COMPLETE:
-                            cEvent = 'C';
-                            break;
-                        case TIMELINE_TRACE_EVT_DEADLINE_MISS:
-                            cEvent = 'M';
-                            break;
-                        case TIMELINE_TRACE_EVT_CONTEXT_SWITCH:
-                            cEvent = 'X';
-                            break;
-                        default:
-                            cEvent = '?';
-                            break;
-                    }
-
-                    if( pxEvt->xType == TIMELINE_TRACE_EVT_FRAME_START )
-                    {
-                        UART_puts( " F" );
-                        UART_putc( '@' );
-                        UART_put_u32( ( uint32_t ) pxEvt->xTick );
-                    }
-                    else
-                    {
-                        UART_putc( ' ' );
-                        UART_puts( pcTaskName );
-                        UART_putc( ':' );
-                        UART_putc( cEvent );
-                        UART_putc( '@' );
-                        UART_put_u32( ( uint32_t ) pxEvt->xTick );
-                    }
-
-                    xHasTaskInSubframe = pdTRUE;
                 }
 
-                if( xHasTaskInSubframe == pdFALSE )
-                {
-                    UART_puts( " no task in subframe" );
-                    UART_put_u32( ulSfIdx );
-                }
+                pcRunningTask = pcFirstActive;
             }
-            UART_puts( "\r\n" );
+
+            UART_puts( "    running = " );
+            if( pcRunningTask != NULL )
+            {
+                UART_puts( pcRunningTask );
+            }
+            else
+            {
+                UART_puts( "idle" );
+            }
+            UART_puts( "\r\n\r\n" );
+
+            if( ulTickEventCount > 0U )
+            {
+                uint32_t ulLeftCount = ulPendingEventCount - ulTickEventCount;
+                for( ulEvtIdx = 0U; ulEvtIdx < ulLeftCount; ulEvtIdx++ )
+                {
+                    xPendingEvents[ ulEvtIdx ] = xPendingEvents[ ulEvtIdx + ulTickEventCount ];
+                }
+                ulPendingEventCount = ulLeftCount;
+            }
+
+            ulLastPrintedMajorFrameId = ulCurrentMajorFrameId;
+            ulLastPrintedSubframeId = ulSubframeId;
         }
 
-        vTaskDelay( pdMS_TO_TICKS( 100U ) );
+        if( xNowTick < ( TickType_t ) 0xFFFFFFFFU )
+        {
+            xNextTickToPrint = xNowTick + 1U;
+        }
+        else
+        {
+            xNextTickToPrint = xNowTick;
+        }
+
+        if( ulDroppedEventCount > 0U )
+        {
+            UART_puts( "[TL-WARN] dropped_events=" );
+            UART_put_u32( ulDroppedEventCount );
+            UART_puts( "\r\n" );
+            ulDroppedEventCount = 0U;
+        }
+
+        vTaskDelay( pdMS_TO_TICKS( 1U ) );
     }
+}
+
+static const char * prvEventTypeToText( TimelineTraceEventType_t xType )
+{
+    switch( xType )
+    {
+        case TIMELINE_TRACE_EVT_HRT_RELEASE:
+        case TIMELINE_TRACE_EVT_SRT_RELEASE:
+            return "Release";
+
+        case TIMELINE_TRACE_EVT_TASK_COMPLETE:
+            return "Complete";
+
+        case TIMELINE_TRACE_EVT_DEADLINE_MISS:
+            return "DeadlineMiss";
+
+        case TIMELINE_TRACE_EVT_CONTEXT_SWITCH:
+            return "ContextSwitch";
+
+        case TIMELINE_TRACE_EVT_FRAME_START:
+            return "FrameStart";
+
+        default:
+            return "Unknown";
+    }
+}
+
+static const char * prvInferRunningTaskNameFromState( const BaseType_t * pxTaskActive,
+                                                      TickType_t xTickInFrame,
+                                                      uint32_t ulSubframeId )
+{
+    uint32_t ulTaskCount = gTimelineConfig.ulTaskCount;
+    uint32_t ulIdx;
+    TickType_t xSubframeTicks = pdMS_TO_TICKS( gTimelineConfig.ulSubframeMs );
+    TickType_t xTickInSubframe = 0U;
+    const char * pcName = NULL;
+
+    if( ( pxTaskActive == NULL ) ||
+        ( gTimelineConfig.pxTasks == NULL ) ||
+        ( gTimelineConfig.ulTaskCount == 0U ) )
+    {
+        return NULL;
+    }
+
+    if( ulTaskCount > TIMELINE_MAX_TASKS )
+    {
+        ulTaskCount = TIMELINE_MAX_TASKS;
+    }
+
+    if( xSubframeTicks > 0U )
+    {
+        xTickInSubframe = xTickInFrame % xSubframeTicks;
+    }
+
+    for( ulIdx = 0U; ulIdx < ulTaskCount; ulIdx++ )
+    {
+        const TimelineTaskConfig_t * pxTask = &gTimelineConfig.pxTasks[ ulIdx ];
+
+        if( ( pxTask->xType == TIMELINE_TASK_HRT ) &&
+            ( pxTask->ulSubframeId == ulSubframeId ) &&
+            ( xTickInSubframe >= pdMS_TO_TICKS( pxTask->ulStartOffsetMs ) ) &&
+            ( xTickInSubframe < pdMS_TO_TICKS( pxTask->ulEndOffsetMs ) ) &&
+            ( pxTaskActive[ ulIdx ] != pdFALSE ) )
+        {
+            pcName = pxTask->pcName;
+            break;
+        }
+    }
+
+    if( pcName == NULL )
+    {
+        for( ulIdx = 0U; ulIdx < ulTaskCount; ulIdx++ )
+        {
+            const TimelineTaskConfig_t * pxTask = &gTimelineConfig.pxTasks[ ulIdx ];
+
+            if( ( pxTask->xType == TIMELINE_TASK_SRT ) &&
+                ( pxTaskActive[ ulIdx ] != pdFALSE ) )
+            {
+                pcName = pxTask->pcName;
+                break;
+            }
+        }
+    }
+
+    return pcName;
 }
 
 void vApplicationMallocFailedHook( void )
