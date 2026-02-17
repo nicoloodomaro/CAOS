@@ -535,6 +535,10 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
             if ((pxHigherPriorityTaskWoken != NULL) && (xResumeHigherPriorityTaskWoken != pdFALSE)) {
                 *pxHigherPriorityTaskWoken = pdTRUE;
             }
+            /* HRT release should preempt promptly at the same tick boundary. */
+            if (pxHigherPriorityTaskWoken != NULL) {
+                *pxHigherPriorityTaskWoken = pdTRUE;
+            }
             prvTracePushFromISR(TIMELINE_TRACE_EVT_HRT_RELEASE, (UBaseType_t) ulIdx, ulCurrentSubframe);
         }
 
@@ -553,6 +557,7 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
             (pxRt->xIsActive == pdFALSE) &&
             (pxRt->xDeadlineMissPendingKill == pdFALSE)) {
             BaseType_t xNoHrtActive = pdTRUE;
+            BaseType_t xIsFirstIncompleteSrt = pdTRUE;
             uint32_t ulProbe;
 
             for (ulProbe = 0U; ulProbe < xTimeline.pxConfig->ulTaskCount; ulProbe++) {
@@ -563,10 +568,22 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
                 }
             }
 
+            /* Keep SRT ordering strict: only the first not-yet-completed SRT
+             * in compile-time order can be released from tick context. */
+            for (ulProbe = 0U; ulProbe < ulIdx; ulProbe++) {
+                if ((xTimeline.pxConfig->pxTasks[ulProbe].xType == TIMELINE_TASK_SRT) &&
+                    (xTimeline.xRuntime[ulProbe].xDeadlineMissPendingKill == pdFALSE) &&
+                    (xTimeline.xRuntime[ulProbe].xCompletedInWindow == pdFALSE)) {
+                    xIsFirstIncompleteSrt = pdFALSE;
+                    break;
+                }
+            }
+
             /* Release only the first eligible SRT in compile-time order
              * to enforce fixed ordering. Subsequent SRTs are released
              * when the preceding one completes. */
             if ((xNoHrtActive != pdFALSE) && (xSrtReleasedThisTick == pdFALSE) &&
+                (xIsFirstIncompleteSrt != pdFALSE) &&
                 (pxRt->xCompletedInWindow == pdFALSE)) {
                 BaseType_t xResumeHigherPriorityTaskWoken = pdFALSE;
 
