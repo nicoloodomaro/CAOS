@@ -539,6 +539,9 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
             if (pxHigherPriorityTaskWoken != NULL) {
                 *pxHigherPriorityTaskWoken = pdTRUE;
             }
+            /* Force PendSV request immediately from ISR path to reduce
+             * release-to-run latency for HRT tasks. */
+            portYIELD_FROM_ISR(pdTRUE);
             prvTracePushFromISR(TIMELINE_TRACE_EVT_HRT_RELEASE, (UBaseType_t) ulIdx, ulCurrentSubframe);
         }
 
