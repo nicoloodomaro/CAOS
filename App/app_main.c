@@ -37,6 +37,7 @@ static void prvTimelineMonitorTask( void * pvArg )
     ( void ) pvArg;
 
     vTaskDelay( pdMS_TO_TICKS( 100U ) );
+    UART_puts( "[TL-LEGEND] F=frame-start R=release C=complete M=deadline-miss X=context-switch @tick=kernel-tick\r\n" );
 
     for( ; ; )
     {
@@ -132,6 +133,9 @@ static void prvTimelineMonitorTask( void * pvArg )
                         case TIMELINE_TRACE_EVT_DEADLINE_MISS:
                             cEvent = 'M';
                             break;
+                        case TIMELINE_TRACE_EVT_CONTEXT_SWITCH:
+                            cEvent = 'X';
+                            break;
                         default:
                             cEvent = '?';
                             break;
@@ -140,10 +144,17 @@ static void prvTimelineMonitorTask( void * pvArg )
                     if( pxEvt->xType == TIMELINE_TRACE_EVT_FRAME_START )
                     {
                         UART_puts( " F" );
+                        UART_putc( '@' );
+                        UART_put_u32( ( uint32_t ) pxEvt->xTick );
                     }
                     else
                     {
-                        UART_put_task_event( pcTaskName, cEvent );
+                        UART_putc( ' ' );
+                        UART_puts( pcTaskName );
+                        UART_putc( ':' );
+                        UART_putc( cEvent );
+                        UART_putc( '@' );
+                        UART_put_u32( ( uint32_t ) pxEvt->xTick );
                     }
 
                     xHasTaskInSubframe = pdTRUE;

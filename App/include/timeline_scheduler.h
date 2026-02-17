@@ -51,7 +51,8 @@ typedef enum TimelineTraceEventType {
     TIMELINE_TRACE_EVT_HRT_RELEASE = 1,
     TIMELINE_TRACE_EVT_SRT_RELEASE = 2,
     TIMELINE_TRACE_EVT_TASK_COMPLETE = 3,
-    TIMELINE_TRACE_EVT_DEADLINE_MISS = 4
+    TIMELINE_TRACE_EVT_DEADLINE_MISS = 4,
+    TIMELINE_TRACE_EVT_CONTEXT_SWITCH = 5
 } TimelineTraceEventType_t;
 
 typedef struct TimelineTraceEvent {

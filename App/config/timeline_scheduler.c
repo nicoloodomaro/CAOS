@@ -20,6 +20,7 @@ typedef struct TimelineSchedulerState {
     BaseType_t xMaintenanceRequestPending;
     TickType_t xLastTickSeen;
     uint32_t ulFrameId;
+    TaskHandle_t xLastSelectedHandle;
     TimelineTaskContext_t xTaskContexts[TIMELINE_MAX_TASKS];
     TimelineTaskRuntime_t xRuntime[TIMELINE_MAX_TASKS];
 } TimelineSchedulerState_t;
@@ -396,6 +397,24 @@ static void prvReleaseFrameStartTasksFromTaskContext(void)
     }
 }
 
+static BaseType_t prvFindTaskIndexByHandle(TaskHandle_t xHandle, UBaseType_t * puxIndex)
+{
+    uint32_t ulIdx;
+
+    if ((xTimeline.pxConfig == NULL) || (xHandle == NULL) || (puxIndex == NULL)) {
+        return pdFALSE;
+    }
+
+    for (ulIdx = 0U; ulIdx < xTimeline.pxConfig->ulTaskCount; ulIdx++) {
+        if (xTimeline.xRuntime[ulIdx].xHandle == xHandle) {
+            *puxIndex = (UBaseType_t) ulIdx;
+            return pdTRUE;
+        }
+    }
+
+    return pdFALSE;
+}
+
 BaseType_t xTimelineSchedulerConfigure(const TimelineConfig_t * pxConfig)
 {
     uint32_t ulIdx;
@@ -413,6 +432,7 @@ BaseType_t xTimelineSchedulerConfigure(const TimelineConfig_t * pxConfig)
     xTimeline.xMaintenanceRequestPending = pdFALSE;
     xTimeline.xLastTickSeen = 0;
     xTimeline.ulFrameId = 0U;
+    xTimeline.xLastSelectedHandle = NULL;
     xTrace.ulHead = 0U;
     xTrace.ulTail = 0U;
 
@@ -454,6 +474,7 @@ void vTimelineSchedulerKernelStart(TickType_t xStartTick)
     xTimeline.xStarted = pdTRUE;
     xTimeline.xMaintenanceRequestPending = pdFALSE;
     xTimeline.ulFrameId = 0U;
+    xTimeline.xLastSelectedHandle = NULL;
     prvResetFrameRuntimeState();
     prvTracePushFromTask(TIMELINE_TRACE_EVT_FRAME_START, 0U, 0U);
     prvReleaseFrameStartTasksFromTaskContext();
@@ -565,6 +586,7 @@ TaskHandle_t xTimelineSchedulerSelectNextTask(TaskHandle_t xDefaultSelected, Tic
     TickType_t xTicksFromFrame;
     TickType_t xTickInSubframe;
     uint32_t ulCurrentSubframe;
+    TaskHandle_t xSelected = xDefaultSelected;
 
     (void) xNowTick;
 
@@ -587,28 +609,42 @@ TaskHandle_t xTimelineSchedulerSelectNextTask(TaskHandle_t xDefaultSelected, Tic
         if ((pxTask->xType == TIMELINE_TASK_HRT) &&
             (pxTask->ulSubframeId == ulCurrentSubframe) &&
             (xTickInSubframe >= pdMS_TO_TICKS(pxTask->ulStartOffsetMs)) &&
-            (xTickInSubframe < pdMS_TO_TICKS(pxTask->ulEndOffsetMs)) && // <= per consentire selezione al tick di deadline
+            (xTickInSubframe < pdMS_TO_TICKS(pxTask->ulEndOffsetMs)) &&
             (pxRt->xHandle != NULL) &&
             (pxRt->xIsActive != pdFALSE) &&
             (pxRt->xCompletedInWindow == pdFALSE) &&
             (pxRt->xDeadlineMissPendingKill == pdFALSE)) {
-            return pxRt->xHandle;
+            xSelected = pxRt->xHandle;
+            break;
         }
     }
 
-    for (ulIdx = 0U; ulIdx < xTimeline.pxConfig->ulTaskCount; ulIdx++) {
-        const TimelineTaskConfig_t * pxTask = &xTimeline.pxConfig->pxTasks[ulIdx];
-        TimelineTaskRuntime_t * pxRt = &xTimeline.xRuntime[ulIdx];
+    if (xSelected == xDefaultSelected) {
+        for (ulIdx = 0U; ulIdx < xTimeline.pxConfig->ulTaskCount; ulIdx++) {
+            const TimelineTaskConfig_t * pxTask = &xTimeline.pxConfig->pxTasks[ulIdx];
+            TimelineTaskRuntime_t * pxRt = &xTimeline.xRuntime[ulIdx];
 
-        if ((pxTask->xType == TIMELINE_TASK_SRT) && (pxRt->xHandle != NULL) &&
-            (pxRt->xIsActive != pdFALSE) &&
-            (pxRt->xDeadlineMissPendingKill == pdFALSE) &&
-            (pxRt->xCompletedInWindow == pdFALSE)) {
-            return pxRt->xHandle;
+            if ((pxTask->xType == TIMELINE_TASK_SRT) && (pxRt->xHandle != NULL) &&
+                (pxRt->xIsActive != pdFALSE) &&
+                (pxRt->xDeadlineMissPendingKill == pdFALSE) &&
+                (pxRt->xCompletedInWindow == pdFALSE)) {
+                xSelected = pxRt->xHandle;
+                break;
+            }
         }
     }
 
-    return xDefaultSelected;
+    if (xSelected != xTimeline.xLastSelectedHandle) {
+        UBaseType_t uxSelectedIdx;
+
+        if (prvFindTaskIndexByHandle(xSelected, &uxSelectedIdx) != pdFALSE) {
+            prvTracePushFromTask(TIMELINE_TRACE_EVT_CONTEXT_SWITCH, uxSelectedIdx, ulCurrentSubframe);
+        }
+
+        xTimeline.xLastSelectedHandle = xSelected;
+    }
+
+    return xSelected;
 }
 
 void vTimelineSchedulerTaskCompletedFromTaskContext(UBaseType_t uxTaskIndex)
