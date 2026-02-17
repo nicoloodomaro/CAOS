@@ -4,75 +4,71 @@
 
 static void vBusyWaitMs(uint32_t ulDurationMs)
 {
+    TickType_t xStartTick = xTaskGetTickCount();
     TickType_t xTargetTicks = pdMS_TO_TICKS(ulDurationMs);
-    TickType_t xWorkedTicks = 0U;
-    TickType_t xLastObservedTick = xTaskGetTickCount();
 
-    while (xWorkedTicks < xTargetTicks) {
-        TickType_t xNowTick = xTaskGetTickCount();
-        TickType_t xDeltaTicks = xNowTick - xLastObservedTick;
-
-        if (xDeltaTicks == 1U) {
-            xWorkedTicks++;
-            xLastObservedTick = xNowTick;
-        } else if (xDeltaTicks > 1U) {
-            xLastObservedTick = xNowTick;
-        }
+    while ((xTaskGetTickCount() - xStartTick) < xTargetTicks) {
     }
-}
-
-static uint32_t ulGetTaskRuntimeMs(const void * pvArg, uint32_t ulFallbackMs)
-{
-    const TimelineTaskExecutionInfo_t * pxExecInfo = (const TimelineTaskExecutionInfo_t *) pvArg;
-
-    if ((pxExecInfo == NULL) ||
-        (pxExecInfo->ulEndOffsetMs <= pxExecInfo->ulStartOffsetMs)) {
-        return ulFallbackMs;
-    }
-
-    return pxExecInfo->ulRunDurationMs;
 }
 
 static void vHrtSenseTask(void * pvArg)
 {
-    vBusyWaitMs(ulGetTaskRuntimeMs(pvArg, 0U));
+    (void) pvArg;
+    vBusyWaitMs(1U);
 }
 
 static void vHrtControlTask(void * pvArg)
 {
-    vBusyWaitMs(ulGetTaskRuntimeMs(pvArg, 0U));
+    (void) pvArg;
+    vBusyWaitMs(1U);
 }
 
 static void vHrtActuationTask(void * pvArg)
 {
-    vBusyWaitMs(ulGetTaskRuntimeMs(pvArg, 0U));
+    (void) pvArg;
+    vBusyWaitMs(4U);
 }
 
 static void vSrtLongTask(void * pvArg)
 {
-    vBusyWaitMs(ulGetTaskRuntimeMs(pvArg, 0U));
+    (void) pvArg;
+    vBusyWaitMs(6U);
 }
 
 static void vSrtLoggerTask(void * pvArg)
 {
-    vBusyWaitMs(ulGetTaskRuntimeMs(pvArg, 0U));
+    (void) pvArg;
+}
+
+static void vSrtDiagTask(void * pvArg)
+{
+    (void) pvArg;
 }
 
 static const TimelineTaskConfig_t xTasks[] = {
-    /* HRT runtime = ulEndOffsetMs - ulStartOffsetMs. */
-    { "HRT_A",     vHrtSenseTask,     TIMELINE_TASK_HRT, 0, 5, 15, tskIDLE_PRIORITY + 4, 256 },
-    { "HRT_B",     vHrtControlTask,   TIMELINE_TASK_HRT, 1, 5, 20, tskIDLE_PRIORITY + 4, 256 },
-    { "HRT_test", vHrtControlTask,   TIMELINE_TASK_HRT, 1, 15, 25, tskIDLE_PRIORITY + 4, 256 },
-    { "HRT_C",     vHrtActuationTask, TIMELINE_TASK_HRT, 3, 5, 15, tskIDLE_PRIORITY + 4, 256 },
+    /*
+     * TEST profile with two visible cases:
+     * 1) Preemption SRT->HRT:
+     *    - sf0: HRT_A release at t=5ms (window 5..15ms), preempting SRT work.
+     *    - sf1: HRT_B release at t=5ms in subframe 1 (window 5..20ms).
+     * 2) HRT deadline miss:
+     *    - In this current configuration HRT_C does NOT miss deadline
+     *      (window 5..15ms, body ~4ms). To force a miss, shrink end offset
+     *      or increase task execution time.
+     */
+    { "HRT_A",     vHrtSenseTask,     TIMELINE_TASK_HRT, 0U, 5U, 15U, tskIDLE_PRIORITY + 4U, 256U },
+    { "HRT_B",     vHrtControlTask,   TIMELINE_TASK_HRT, 1U, 5U, 20U, tskIDLE_PRIORITY + 4U, 256U },
+    { "HRT_C",     vHrtActuationTask, TIMELINE_TASK_HRT, 3U, 5U, 15U, tskIDLE_PRIORITY + 4U, 256U },
 
     /* SRT fixed compile-time order. Timing fields are placeholders for SRT in current scheduler. */
-    { "SRT_LONG",  vSrtLongTask,      TIMELINE_TASK_SRT, 0, 0, 10, tskIDLE_PRIORITY + 1, 256 },
-    { "SRT_LOG",   vSrtLoggerTask,    TIMELINE_TASK_SRT, 0, 10, 20, tskIDLE_PRIORITY + 1, 256 }
+    { "SRT_LONG",  vSrtLongTask,      TIMELINE_TASK_SRT, 0U, 0U, 0U, tskIDLE_PRIORITY + 1U, 256U },
+    { "SRT_LOG",   vSrtLoggerTask,    TIMELINE_TASK_SRT, 0U, 0U, 0U, tskIDLE_PRIORITY + 1U, 256U }
+    //{ "SRT_DIAG",  vSrtDiagTask,      TIMELINE_TASK_SRT, 0U, 0U, 0U, tskIDLE_PRIORITY + 1U, 256U }
 };
 
 const TimelineConfig_t gTimelineConfig = {
-    .ulMajorFrameMs = 100,
-    .ulSubframeMs = 25,
+    .ulMajorFrameMs = 100U,
+    .ulSubframeMs = 25U,
     .pxTasks = xTasks,
     .ulTaskCount = (uint32_t) (sizeof(xTasks) / sizeof(xTasks[0]))
 };
