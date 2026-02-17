@@ -6,9 +6,6 @@
 
 static void prvTimelineMonitorTask( void * pvArg );
 static const char * prvEventTypeToText( TimelineTraceEventType_t xType );
-static const char * prvInferRunningTaskNameFromState( const BaseType_t * pxTaskActive,
-                                                      TickType_t xTickInFrame,
-                                                      uint32_t ulSubframeId );
 
 #define TL_MONITOR_READ_BATCH_EVENTS    64U
 #define TL_MONITOR_PENDING_EVENTS       256U
@@ -44,12 +41,14 @@ static void prvTimelineMonitorTask( void * pvArg )
     uint32_t ulLastPrintedMajorFrameId = 0xFFFFFFFFU;
     uint32_t ulLastPrintedSubframeId = 0xFFFFFFFFU;
     BaseType_t xSimTaskActive[ TIMELINE_MAX_TASKS ] = { 0 };
+    int32_t lCurrentRunningTaskIdx = -1;
     const TickType_t xMajorFrameTicks = pdMS_TO_TICKS( gTimelineConfig.ulMajorFrameMs );
     const TickType_t xSubframeTicks = pdMS_TO_TICKS( gTimelineConfig.ulSubframeMs );
 
     ( void ) pvArg;
 
     UART_puts( "[TL-LEGEND] Release, Complete, DeadlineMiss, ContextSwitch, FrameStart\r\n" );
+    UART_puts( "[TL-NOTE] running derives from ContextSwitch events.\r\n" );
 
     for( ; ; )
     {
@@ -223,6 +222,7 @@ static void prvTimelineMonitorTask( void * pvArg )
                             xSimTaskActive[ ulResetIdx ] = pdFALSE;
                         }
 
+                        lCurrentRunningTaskIdx = -1;
                         UART_puts( "FRAME_START\r\n" );
                         continue;
                     }
@@ -231,6 +231,10 @@ static void prvTimelineMonitorTask( void * pvArg )
                         ( pxEvt->uxTaskIndex < gTimelineConfig.ulTaskCount ) )
                     {
                         pcTaskName = gTimelineConfig.pxTasks[ pxEvt->uxTaskIndex ].pcName;
+                    }
+                    else if( pxEvt->xType == TIMELINE_TRACE_EVT_CONTEXT_SWITCH )
+                    {
+                        pcTaskName = "KERNEL/NON-MANAGED";
                     }
 
                     UART_puts( pcTaskName );
@@ -245,20 +249,38 @@ static void prvTimelineMonitorTask( void * pvArg )
                         {
                             xSimTaskActive[ uxTaskIndex ] = pdTRUE;
                         }
+                        else if( pxEvt->xType == TIMELINE_TRACE_EVT_CONTEXT_SWITCH )
+                        {
+                            xSimTaskActive[ uxTaskIndex ] = pdTRUE;
+                            lCurrentRunningTaskIdx = ( int32_t ) uxTaskIndex;
+                        }
                         else if( ( pxEvt->xType == TIMELINE_TRACE_EVT_TASK_COMPLETE ) ||
                                  ( pxEvt->xType == TIMELINE_TRACE_EVT_DEADLINE_MISS ) )
                         {
                             xSimTaskActive[ uxTaskIndex ] = pdFALSE;
+                            if( lCurrentRunningTaskIdx == ( int32_t ) uxTaskIndex )
+                            {
+                                lCurrentRunningTaskIdx = -1;
+                            }
                         }
+                    }
+                    else if( pxEvt->xType == TIMELINE_TRACE_EVT_CONTEXT_SWITCH )
+                    {
+                        lCurrentRunningTaskIdx = -1;
                     }
                 }
             }
 
-            pcRunningTask = prvInferRunningTaskNameFromState( &xSimTaskActive[ 0 ],
-                                                              xTickInFrame,
-                                                              ulSubframeId );
-
-            if( pcRunningTask == NULL )
+            if( ( lCurrentRunningTaskIdx >= 0 ) &&
+                ( ( uint32_t ) lCurrentRunningTaskIdx < gTimelineConfig.ulTaskCount ) &&
+                ( ( uint32_t ) lCurrentRunningTaskIdx < TIMELINE_MAX_TASKS ) &&
+                ( xSimTaskActive[ ( uint32_t ) lCurrentRunningTaskIdx ] != pdFALSE ) &&
+                ( gTimelineConfig.pxTasks != NULL ) &&
+                ( gTimelineConfig.pxTasks[ ( uint32_t ) lCurrentRunningTaskIdx ].pcName != NULL ) )
+            {
+                pcRunningTask = gTimelineConfig.pxTasks[ ( uint32_t ) lCurrentRunningTaskIdx ].pcName;
+            }
+            else
             {
                 const char * pcFirstActive = NULL;
                 uint32_t ulActiveIdx;
@@ -281,7 +303,10 @@ static void prvTimelineMonitorTask( void * pvArg )
                     }
                 }
 
-                pcRunningTask = pcFirstActive;
+                if( pcFirstActive != NULL )
+                {
+                    pcRunningTask = "unknown (ready-no-switch)";
+                }
             }
 
             UART_puts( "    running = " );
@@ -353,66 +378,6 @@ static const char * prvEventTypeToText( TimelineTraceEventType_t xType )
         default:
             return "Unknown";
     }
-}
-
-static const char * prvInferRunningTaskNameFromState( const BaseType_t * pxTaskActive,
-                                                      TickType_t xTickInFrame,
-                                                      uint32_t ulSubframeId )
-{
-    uint32_t ulTaskCount = gTimelineConfig.ulTaskCount;
-    uint32_t ulIdx;
-    TickType_t xSubframeTicks = pdMS_TO_TICKS( gTimelineConfig.ulSubframeMs );
-    TickType_t xTickInSubframe = 0U;
-    const char * pcName = NULL;
-
-    if( ( pxTaskActive == NULL ) ||
-        ( gTimelineConfig.pxTasks == NULL ) ||
-        ( gTimelineConfig.ulTaskCount == 0U ) )
-    {
-        return NULL;
-    }
-
-    if( ulTaskCount > TIMELINE_MAX_TASKS )
-    {
-        ulTaskCount = TIMELINE_MAX_TASKS;
-    }
-
-    if( xSubframeTicks > 0U )
-    {
-        xTickInSubframe = xTickInFrame % xSubframeTicks;
-    }
-
-    for( ulIdx = 0U; ulIdx < ulTaskCount; ulIdx++ )
-    {
-        const TimelineTaskConfig_t * pxTask = &gTimelineConfig.pxTasks[ ulIdx ];
-
-        if( ( pxTask->xType == TIMELINE_TASK_HRT ) &&
-            ( pxTask->ulSubframeId == ulSubframeId ) &&
-            ( xTickInSubframe >= pdMS_TO_TICKS( pxTask->ulStartOffsetMs ) ) &&
-            ( xTickInSubframe < pdMS_TO_TICKS( pxTask->ulEndOffsetMs ) ) &&
-            ( pxTaskActive[ ulIdx ] != pdFALSE ) )
-        {
-            pcName = pxTask->pcName;
-            break;
-        }
-    }
-
-    if( pcName == NULL )
-    {
-        for( ulIdx = 0U; ulIdx < ulTaskCount; ulIdx++ )
-        {
-            const TimelineTaskConfig_t * pxTask = &gTimelineConfig.pxTasks[ ulIdx ];
-
-            if( ( pxTask->xType == TIMELINE_TASK_SRT ) &&
-                ( pxTaskActive[ ulIdx ] != pdFALSE ) )
-            {
-                pcName = pxTask->pcName;
-                break;
-            }
-        }
-    }
-
-    return pcName;
 }
 
 void vApplicationMallocFailedHook( void )

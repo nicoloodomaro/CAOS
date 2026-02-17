@@ -653,9 +653,14 @@ TaskHandle_t xTimelineSchedulerSelectNextTask(TaskHandle_t xDefaultSelected, Tic
 
     if (xSelected != xTimeline.xLastSelectedHandle) {
         UBaseType_t uxSelectedIdx;
+        UBaseType_t uxPrevSelectedIdx;
 
         if (prvFindTaskIndexByHandle(xSelected, &uxSelectedIdx) != pdFALSE) {
             prvTracePushFromSchedulerContext(TIMELINE_TRACE_EVT_CONTEXT_SWITCH, uxSelectedIdx, ulCurrentSubframe);
+        } else if (prvFindTaskIndexByHandle(xTimeline.xLastSelectedHandle, &uxPrevSelectedIdx) != pdFALSE) {
+            /* Trace switch away from timeline-managed task to a non-managed one. */
+            (void) uxPrevSelectedIdx;
+            prvTracePushFromSchedulerContext(TIMELINE_TRACE_EVT_CONTEXT_SWITCH, (UBaseType_t) TIMELINE_MAX_TASKS, ulCurrentSubframe);
         }
 
         xTimeline.xLastSelectedHandle = xSelected;
