@@ -85,6 +85,13 @@ static void prvTracePushFromISR(TimelineTraceEventType_t xType, UBaseType_t uxTa
     taskEXIT_CRITICAL_FROM_ISR(uxSavedInterruptStatus);
 }
 
+/* Called from kernel task-selection path where caller already holds the
+ * scheduler/interrupt protection needed for consistent trace writes. */
+static void prvTracePushFromSchedulerContext(TimelineTraceEventType_t xType, UBaseType_t uxTaskIndex, uint32_t ulSubframeId)
+{
+    prvTracePush(xType, uxTaskIndex, ulSubframeId);
+}
+
 static void prvTimelineManagedTask(void * pvArg)
 {
     const TimelineTaskContext_t * pxCtx = (const TimelineTaskContext_t *) pvArg;
@@ -638,7 +645,7 @@ TaskHandle_t xTimelineSchedulerSelectNextTask(TaskHandle_t xDefaultSelected, Tic
         UBaseType_t uxSelectedIdx;
 
         if (prvFindTaskIndexByHandle(xSelected, &uxSelectedIdx) != pdFALSE) {
-            prvTracePushFromTask(TIMELINE_TRACE_EVT_CONTEXT_SWITCH, uxSelectedIdx, ulCurrentSubframe);
+            prvTracePushFromSchedulerContext(TIMELINE_TRACE_EVT_CONTEXT_SWITCH, uxSelectedIdx, ulCurrentSubframe);
         }
 
         xTimeline.xLastSelectedHandle = xSelected;
