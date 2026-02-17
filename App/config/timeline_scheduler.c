@@ -719,6 +719,7 @@ void vTimelineSchedulerTaskCompletedFromTaskContext(UBaseType_t uxTaskIndex)
      * execute sequentially within the available idle time of the subframe. */
     {
         BaseType_t xNoHrtActive = pdTRUE;
+        BaseType_t xNoSrtActive = pdTRUE;
         uint32_t ulIdx;
 
         for (ulIdx = 0U; ulIdx < xTimeline.pxConfig->ulTaskCount; ulIdx++) {
@@ -730,6 +731,20 @@ void vTimelineSchedulerTaskCompletedFromTaskContext(UBaseType_t uxTaskIndex)
         }
 
         if (xNoHrtActive == pdFALSE) {
+            return;
+        }
+
+        /* Keep SRT strictly sequential: do not release a new SRT while another
+         * SRT is still active (e.g., preempted by an HRT and not completed yet). */
+        for (ulIdx = 0U; ulIdx < xTimeline.pxConfig->ulTaskCount; ulIdx++) {
+            if ((xTimeline.pxConfig->pxTasks[ulIdx].xType == TIMELINE_TASK_SRT) &&
+                (xTimeline.xRuntime[ulIdx].xIsActive != pdFALSE)) {
+                xNoSrtActive = pdFALSE;
+                break;
+            }
+        }
+
+        if (xNoSrtActive == pdFALSE) {
             return;
         }
 
