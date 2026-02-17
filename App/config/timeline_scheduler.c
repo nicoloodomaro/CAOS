@@ -624,6 +624,7 @@ TaskHandle_t xTimelineSchedulerSelectNextTask(TaskHandle_t xDefaultSelected, Tic
     TickType_t xTickInSubframe;
     uint32_t ulCurrentSubframe;
     TaskHandle_t xSelected = xDefaultSelected;
+    BaseType_t xHrtSelected = pdFALSE;
 
     (void) xNowTick;
 
@@ -652,11 +653,12 @@ TaskHandle_t xTimelineSchedulerSelectNextTask(TaskHandle_t xDefaultSelected, Tic
             (pxRt->xCompletedInWindow == pdFALSE) &&
             (pxRt->xDeadlineMissPendingKill == pdFALSE)) {
             xSelected = pxRt->xHandle;
+            xHrtSelected = pdTRUE;
             break;
         }
     }
 
-    if (xSelected == xDefaultSelected) {
+    if (xHrtSelected == pdFALSE) {
         for (ulIdx = 0U; ulIdx < xTimeline.pxConfig->ulTaskCount; ulIdx++) {
             const TimelineTaskConfig_t * pxTask = &xTimeline.pxConfig->pxTasks[ulIdx];
             TimelineTaskRuntime_t * pxRt = &xTimeline.xRuntime[ulIdx];
