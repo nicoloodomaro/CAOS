@@ -2,9 +2,14 @@
 #include "task.h"
 #include "timeline_config.h"
 #include "timeline_scheduler.h"
+#include "uart.h"
 
 int main(void)
 {
+#if ( DEBUG == 1 )
+    UART_init();
+#endif
+
     configASSERT(xTimelineSchedulerConfigure(&gTimelineConfig) == pdPASS);
     configASSERT(xTimelineSchedulerCreateManagedTasks() == pdPASS);
 

@@ -43,6 +43,7 @@ typedef struct TimelineTaskRuntime {
     uint32_t ulReleaseCount;
     uint32_t ulCompletionCount;
     uint32_t ulDeadlineMissCount;
+    TickType_t xExecutedTicksInActivation;
     BaseType_t xIsActive;
     BaseType_t xCompletedInWindow;
     BaseType_t xDeadlineMissPendingKill;
@@ -55,6 +56,7 @@ void vTimelineSchedulerKernelStart(TickType_t xStartTick);
 void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherPriorityTaskWoken);
 TaskHandle_t xTimelineSchedulerSelectNextTask(TaskHandle_t xDefaultSelected, TickType_t xNowTick);
 void vTimelineSchedulerTaskCompletedFromTaskContext(UBaseType_t uxTaskIndex);
+TickType_t xTimelineSchedulerGetTaskExecutedTicks(UBaseType_t uxTaskIndex);
 const TimelineTaskRuntime_t * pxTimelineSchedulerGetRuntime(uint32_t * pulTaskCount);
 
 

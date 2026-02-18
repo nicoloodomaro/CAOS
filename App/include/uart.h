@@ -4,6 +4,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifndef DEBUG
+#define DEBUG    1
+#endif
+
 #define UART0_ADDRESS     ( 0x40004000UL )
 #define UART0_DATA        ( *( ( volatile uint32_t * ) ( UART0_ADDRESS + 0UL ) ) )
 #define UART0_STATE       ( *( ( volatile uint32_t * ) ( UART0_ADDRESS + 4UL ) ) )

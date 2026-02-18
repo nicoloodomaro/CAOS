@@ -103,6 +103,7 @@ SOURCE_FILES += $(DEMO_PROJECT)/app_main.c
 SOURCE_FILES += $(DEMO_PROJECT)/config/timeline_config.c
 SOURCE_FILES += $(DEMO_PROJECT)/config/timeline_scheduler.c
 SOURCE_FILES += $(DEMO_PROJECT)/config/timeline_kernel_hooks.c
+SOURCE_FILES += $(DEMO_PROJECT)/board/uart.c
 
 # Start-up code
 SOURCE_FILES += $(DEMO_PROJECT)/startup_mps2_an385.c
