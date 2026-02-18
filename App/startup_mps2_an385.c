@@ -24,7 +24,6 @@
  *
  */
 
-#include "uart.h"
 
 #include <stdint.h>
 
@@ -145,8 +144,6 @@ __attribute__( ( used ) ) void prvGetRegistersFromStack( uint32_t * pulFaultStac
     lr = pulFaultStackAddress[ 5 ];
     pc = pulFaultStackAddress[ 6 ];
     psr = pulFaultStackAddress[ 7 ];
-
-    UART_puts( "Calling prvGetRegistersFromStack() from fault handler\r\n" );
 
     /* When the following loop is hit, variables contain register values. */
     for( ; ; )

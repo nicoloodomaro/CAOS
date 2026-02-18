@@ -38,11 +38,13 @@ static void vSrtLongTask(void * pvArg)
 static void vSrtLoggerTask(void * pvArg)
 {
     (void) pvArg;
+    vBusyWaitMs(1U);
 }
 
 static void vSrtDiagTask(void * pvArg)
 {
     (void) pvArg;
+    vBusyWaitMs(10U);
 }
 
 static const TimelineTaskConfig_t xTasks[] = {
@@ -62,7 +64,8 @@ static const TimelineTaskConfig_t xTasks[] = {
 
     /* SRT fixed compile-time order. Timing fields are placeholders for SRT in current scheduler. */
     { "SRT_LONG",  vSrtLongTask,      TIMELINE_TASK_SRT, 0U, 0U, 0U, tskIDLE_PRIORITY + 1U, 256U },
-    { "SRT_LOG",   vSrtLoggerTask,    TIMELINE_TASK_SRT, 0U, 0U, 0U, tskIDLE_PRIORITY + 1U, 256U }
+    { "SRT_LOG",   vSrtLoggerTask,    TIMELINE_TASK_SRT, 0U, 0U, 0U, tskIDLE_PRIORITY + 1U, 256U },
+    { "SRT_DIAG",  vSrtDiagTask,      TIMELINE_TASK_SRT, 0U, 0U, 0U, tskIDLE_PRIORITY + 1U, 256U }
     //{ "SRT_DIAG",  vSrtDiagTask,      TIMELINE_TASK_SRT, 0U, 0U, 0U, tskIDLE_PRIORITY + 1U, 256U }
 };
 
