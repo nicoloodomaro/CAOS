@@ -42,6 +42,7 @@ static void prvTimelineMonitorTask( void * pvArg )
     uint32_t ulLastPrintedSubframeId = 0xFFFFFFFFU;
     BaseType_t xSimTaskActive[ TIMELINE_MAX_TASKS ] = { 0 };
     int32_t lCurrentRunningTaskIdx = -1;
+    BaseType_t xRunningNonManaged = pdFALSE;
     const TickType_t xMajorFrameTicks = pdMS_TO_TICKS( gTimelineConfig.ulMajorFrameMs );
     const TickType_t xSubframeTicks = pdMS_TO_TICKS( gTimelineConfig.ulSubframeMs );
 
@@ -223,6 +224,7 @@ static void prvTimelineMonitorTask( void * pvArg )
                         }
 
                         lCurrentRunningTaskIdx = -1;
+                        xRunningNonManaged = pdFALSE;
                         UART_puts( "FRAME_START\r\n" );
                         continue;
                     }
@@ -253,6 +255,7 @@ static void prvTimelineMonitorTask( void * pvArg )
                         {
                             xSimTaskActive[ uxTaskIndex ] = pdTRUE;
                             lCurrentRunningTaskIdx = ( int32_t ) uxTaskIndex;
+                            xRunningNonManaged = pdFALSE;
                         }
                         else if( ( pxEvt->xType == TIMELINE_TRACE_EVT_TASK_COMPLETE ) ||
                                  ( pxEvt->xType == TIMELINE_TRACE_EVT_DEADLINE_MISS ) )
@@ -267,6 +270,7 @@ static void prvTimelineMonitorTask( void * pvArg )
                     else if( pxEvt->xType == TIMELINE_TRACE_EVT_CONTEXT_SWITCH )
                     {
                         lCurrentRunningTaskIdx = -1;
+                        xRunningNonManaged = pdTRUE;
                     }
                 }
             }
@@ -279,6 +283,10 @@ static void prvTimelineMonitorTask( void * pvArg )
                 ( gTimelineConfig.pxTasks[ ( uint32_t ) lCurrentRunningTaskIdx ].pcName != NULL ) )
             {
                 pcRunningTask = gTimelineConfig.pxTasks[ ( uint32_t ) lCurrentRunningTaskIdx ].pcName;
+            }
+            else if( xRunningNonManaged != pdFALSE )
+            {
+                pcRunningTask = "non-managed";
             }
             else
             {

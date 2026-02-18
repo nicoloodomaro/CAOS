@@ -19,6 +19,7 @@ typedef struct TimelineSchedulerState {
     BaseType_t xFrameResetPending;
     BaseType_t xMaintenanceRequestPending;
     TickType_t xLastTickSeen;
+    TickType_t xSrtDispatchEarliestTick;
     uint32_t ulFrameId;
     TaskHandle_t xLastSelectedHandle;
     TimelineTaskContext_t xTaskContexts[TIMELINE_MAX_TASKS];
@@ -29,6 +30,10 @@ static TimelineSchedulerState_t xTimeline;
 
 #ifndef TIMELINE_TRACE_BUFFER_LEN
 #define TIMELINE_TRACE_BUFFER_LEN    256U
+#endif
+
+#ifndef TIMELINE_SRT_DISPATCH_DELAY_AFTER_HRT_TICKS
+#define TIMELINE_SRT_DISPATCH_DELAY_AFTER_HRT_TICKS    1U
 #endif
 
 typedef struct TimelineTraceBufferState {
@@ -49,6 +54,16 @@ static uint32_t prvComputeCurrentSubframe(void)
 
     xTicksFromFrame = xTimeline.xLastTickSeen - xTimeline.xFrameStartTick;
     return (uint32_t) (xTicksFromFrame / xTimeline.xSubframeTicks);
+}
+
+static BaseType_t prvCanDispatchSrtNow(void)
+{
+#if (TIMELINE_SRT_DISPATCH_DELAY_AFTER_HRT_TICKS > 0U)
+    if (xTimeline.xLastTickSeen < xTimeline.xSrtDispatchEarliestTick) {
+        return pdFALSE;
+    }
+#endif
+    return pdTRUE;
 }
 
 static void prvTracePush(TimelineTraceEventType_t xType, UBaseType_t uxTaskIndex, uint32_t ulSubframeId)
@@ -438,6 +453,7 @@ BaseType_t xTimelineSchedulerConfigure(const TimelineConfig_t * pxConfig)
     xTimeline.xFrameResetPending = pdFALSE;
     xTimeline.xMaintenanceRequestPending = pdFALSE;
     xTimeline.xLastTickSeen = 0;
+    xTimeline.xSrtDispatchEarliestTick = 0;
     xTimeline.ulFrameId = 0U;
     xTimeline.xLastSelectedHandle = NULL;
     xTrace.ulHead = 0U;
@@ -482,6 +498,7 @@ void vTimelineSchedulerKernelStart(TickType_t xStartTick)
     xTimeline.xMaintenanceRequestPending = pdFALSE;
     xTimeline.ulFrameId = 0U;
     xTimeline.xLastSelectedHandle = NULL;
+    xTimeline.xSrtDispatchEarliestTick = xStartTick;
     prvResetFrameRuntimeState();
     prvTracePushFromTask(TIMELINE_TRACE_EVT_FRAME_START, 0U, 0U);
     prvReleaseFrameStartTasksFromTaskContext();
@@ -509,6 +526,7 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
         xTimeline.xFrameResetPending = pdTRUE;
         xTicksFromFrame = 0U;
         xTimeline.ulFrameId++;
+        xTimeline.xSrtDispatchEarliestTick = xNowTick;
         prvResetFrameRuntimeState();
         prvTracePushFromISR(TIMELINE_TRACE_EVT_FRAME_START, 0U, 0U);
     }
@@ -587,6 +605,7 @@ void vTimelineSchedulerOnTickFromISR(TickType_t xNowTick, BaseType_t * pxHigherP
              * when the preceding one completes. */
             if ((xNoHrtActive != pdFALSE) && (xSrtReleasedThisTick == pdFALSE) &&
                 (xIsFirstIncompleteSrt != pdFALSE) &&
+                (prvCanDispatchSrtNow() != pdFALSE) &&
                 (pxRt->xCompletedInWindow == pdFALSE)) {
                 BaseType_t xResumeHigherPriorityTaskWoken = pdFALSE;
 
@@ -659,16 +678,18 @@ TaskHandle_t xTimelineSchedulerSelectNextTask(TaskHandle_t xDefaultSelected, Tic
     }
 
     if (xHrtSelected == pdFALSE) {
-        for (ulIdx = 0U; ulIdx < xTimeline.pxConfig->ulTaskCount; ulIdx++) {
-            const TimelineTaskConfig_t * pxTask = &xTimeline.pxConfig->pxTasks[ulIdx];
-            TimelineTaskRuntime_t * pxRt = &xTimeline.xRuntime[ulIdx];
+        if (prvCanDispatchSrtNow() != pdFALSE) {
+            for (ulIdx = 0U; ulIdx < xTimeline.pxConfig->ulTaskCount; ulIdx++) {
+                const TimelineTaskConfig_t * pxTask = &xTimeline.pxConfig->pxTasks[ulIdx];
+                TimelineTaskRuntime_t * pxRt = &xTimeline.xRuntime[ulIdx];
 
-            if ((pxTask->xType == TIMELINE_TASK_SRT) && (pxRt->xHandle != NULL) &&
-                (pxRt->xIsActive != pdFALSE) &&
-                (pxRt->xDeadlineMissPendingKill == pdFALSE) &&
-                (pxRt->xCompletedInWindow == pdFALSE)) {
-                xSelected = pxRt->xHandle;
-                break;
+                if ((pxTask->xType == TIMELINE_TASK_SRT) && (pxRt->xHandle != NULL) &&
+                    (pxRt->xIsActive != pdFALSE) &&
+                    (pxRt->xDeadlineMissPendingKill == pdFALSE) &&
+                    (pxRt->xCompletedInWindow == pdFALSE)) {
+                    xSelected = pxRt->xHandle;
+                    break;
+                }
             }
         }
     }
@@ -715,6 +736,19 @@ void vTimelineSchedulerTaskCompletedFromTaskContext(UBaseType_t uxTaskIndex)
 
     prvTracePushFromTask(TIMELINE_TRACE_EVT_TASK_COMPLETE, uxTaskIndex, prvComputeCurrentSubframe());
 
+    if (xTimeline.pxConfig->pxTasks[uxTaskIndex].xType == TIMELINE_TASK_HRT) {
+#if (TIMELINE_SRT_DISPATCH_DELAY_AFTER_HRT_TICKS > 0U)
+        taskENTER_CRITICAL();
+        if (xTimeline.xLastTickSeen <= (portMAX_DELAY - (TickType_t) TIMELINE_SRT_DISPATCH_DELAY_AFTER_HRT_TICKS)) {
+            xTimeline.xSrtDispatchEarliestTick =
+                xTimeline.xLastTickSeen + (TickType_t) TIMELINE_SRT_DISPATCH_DELAY_AFTER_HRT_TICKS;
+        } else {
+            xTimeline.xSrtDispatchEarliestTick = portMAX_DELAY;
+        }
+        taskEXIT_CRITICAL();
+#endif
+    }
+
     /* Immediately release the next SRT in fixed order (if any) so SRTs
      * execute sequentially within the available idle time of the subframe. */
     {
@@ -745,6 +779,10 @@ void vTimelineSchedulerTaskCompletedFromTaskContext(UBaseType_t uxTaskIndex)
         }
 
         if (xNoSrtActive == pdFALSE) {
+            return;
+        }
+
+        if (prvCanDispatchSrtNow() == pdFALSE) {
             return;
         }
 
