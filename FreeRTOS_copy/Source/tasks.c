@@ -31,6 +31,7 @@
 #include <string.h>
 /* Timeline scheduler kernel hooks */
 #include "timeline_kernel_hooks.h"
+#include "uart.h"
 
 /* Defining MPU_WRAPPERS_INCLUDED_FROM_API_FILE prevents task.h from redefining
  * all the API functions to use the MPU wrappers.  That should only be done when
@@ -3757,6 +3758,14 @@ void vTaskStartScheduler( void )
         xSchedulerRunning = pdTRUE;
         xTickCount = ( TickType_t ) configINITIAL_TICK_COUNT;
 
+        #if ( DEBUG == 1 )
+        {
+            UART_puts( "tick " );
+            UART_put_u32( ( uint32_t ) xTickCount );
+            UART_puts( ":\r\n" );
+        }
+        #endif
+
         /* If configGENERATE_RUN_TIME_STATS is defined then the following
          * macro must be defined to configure the timer/counter used to generate
          * the run time counter time base.   NOTE:  If configGENERATE_RUN_TIME_STATS
@@ -4773,6 +4782,14 @@ BaseType_t xTaskIncrementTick( void )
         {
             mtCOVERAGE_TEST_MARKER();
         }
+
+        #if ( DEBUG == 1 )
+        {
+            UART_puts( "tick " );
+            UART_put_u32( ( uint32_t ) xConstTickCount );
+            UART_puts( ":\r\n" );
+        }
+        #endif
 
         /* Call the timeline scheduler tick hook from kernel tick processing.
          * The hook may notify/resume timeline-managed tasks and request a

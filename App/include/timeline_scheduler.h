@@ -23,9 +23,7 @@ typedef struct TimelineTaskConfig {
     uint16_t usStackDepthWords;
 } TimelineTaskConfig_t;
 
-typedef struct TimelineTaskExecutionInfo {
-    UBaseType_t uxTaskIndex;
-} TimelineTaskExecutionInfo_t;
+typedef UBaseType_t TimelineTaskExecutionInfo_t;
 
 typedef struct TimelineConfig {
     uint32_t ulMajorFrameMs;

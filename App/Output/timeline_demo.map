@@ -798,7 +798,6 @@ Discarded input sections
  .group         0x00000000        0xc ./Output/timeline_config.o
  .group         0x00000000        0xc ./Output/timeline_config.o
  .group         0x00000000        0xc ./Output/timeline_config.o
- .group         0x00000000        0xc ./Output/timeline_config.o
  .text          0x00000000        0x0 ./Output/timeline_config.o
  .data          0x00000000        0x0 ./Output/timeline_config.o
  .bss           0x00000000        0x0 ./Output/timeline_config.o
@@ -816,7 +815,6 @@ Discarded input sections
  .debug_macro   0x00000000     0x1002 ./Output/timeline_config.o
  .debug_macro   0x00000000       0xc3 ./Output/timeline_config.o
  .debug_macro   0x00000000      0x14f ./Output/timeline_config.o
- .debug_macro   0x00000000       0x10 ./Output/timeline_config.o
  .group         0x00000000        0xc ./Output/timeline_scheduler.o
  .group         0x00000000        0xc ./Output/timeline_scheduler.o
  .group         0x00000000        0xc ./Output/timeline_scheduler.o
@@ -1229,17 +1227,17 @@ END GROUP
                 0x0000241c                main
  .text.vBusyWaitMs
                 0x00002450       0x2a ./Output/timeline_config.o
- .text.vSrtShort
+ .text.vSrtZTask
                 0x0000247a        0x6 ./Output/timeline_config.o
- .text.vSrtMajorMiss
+ .text.vSrtYTask
                 0x00002480        0x6 ./Output/timeline_config.o
- .text.vHrtMajorMiss
+ .text.vSrtXTask
                 0x00002486        0x6 ./Output/timeline_config.o
- .text.vHrtMissB
+ .text.vHrtCTask
                 0x0000248c        0x6 ./Output/timeline_config.o
- .text.vHrtPassSubframe
+ .text.vHrtBTask
                 0x00002492        0x6 ./Output/timeline_config.o
- .text.vHrtMissA
+ .text.vHrtATask
                 0x00002498        0x6 ./Output/timeline_config.o
  *fill*         0x0000249e        0x2 
  .text.prvSelectTimelineTask
@@ -1247,74 +1245,74 @@ END GROUP
  .text.prvHasAnyActiveTaskOfType
                 0x000025e8       0x4c ./Output/timeline_scheduler.o
  .text.prvCreateManagedTaskIfMissing
-                0x00002634       0x7c ./Output/timeline_scheduler.o
+                0x00002634       0x74 ./Output/timeline_scheduler.o
  .text.prvResetFrameRuntimeState
-                0x000026b0       0x3c ./Output/timeline_scheduler.o
+                0x000026a8       0x3c ./Output/timeline_scheduler.o
  .text.prvDebugNormalizeTaskName
-                0x000026ec       0x30 ./Output/timeline_scheduler.o
+                0x000026e4       0x30 ./Output/timeline_scheduler.o
  .text.prvDebugPrintContextSwitch
-                0x0000271c       0x5c ./Output/timeline_scheduler.o
+                0x00002714       0x5c ./Output/timeline_scheduler.o
  .text.prvDebugTaskNameOrIdle
-                0x00002778       0x16 ./Output/timeline_scheduler.o
- *fill*         0x0000278e        0x2 
+                0x00002770       0x16 ./Output/timeline_scheduler.o
+ *fill*         0x00002786        0x2 
  .text.prvTimelineMaintenanceCallback
-                0x00002790       0x50 ./Output/timeline_scheduler.o
+                0x00002788       0x50 ./Output/timeline_scheduler.o
  .text.prvReleaseTaskFromTaskContext
-                0x000027e0       0x70 ./Output/timeline_scheduler.o
+                0x000027d8       0x70 ./Output/timeline_scheduler.o
  .text.prvReleaseTaskFromISR
-                0x00002850       0x6c ./Output/timeline_scheduler.o
+                0x00002848       0x6c ./Output/timeline_scheduler.o
  .text.xTimelineSchedulerIsConfigured
-                0x000028bc       0x14 ./Output/timeline_scheduler.o
-                0x000028bc                xTimelineSchedulerIsConfigured
+                0x000028b4       0x14 ./Output/timeline_scheduler.o
+                0x000028b4                xTimelineSchedulerIsConfigured
  .text.xTimelineSchedulerConfigure
-                0x000028d0       0xc8 ./Output/timeline_scheduler.o
-                0x000028d0                xTimelineSchedulerConfigure
+                0x000028c8       0xc8 ./Output/timeline_scheduler.o
+                0x000028c8                xTimelineSchedulerConfigure
  .text.xTimelineSchedulerCreateManagedTasks
-                0x00002998       0x34 ./Output/timeline_scheduler.o
-                0x00002998                xTimelineSchedulerCreateManagedTasks
+                0x00002990       0x34 ./Output/timeline_scheduler.o
+                0x00002990                xTimelineSchedulerCreateManagedTasks
  .text.vTimelineSchedulerKernelStart
-                0x000029cc      0x114 ./Output/timeline_scheduler.o
-                0x000029cc                vTimelineSchedulerKernelStart
+                0x000029c4      0x114 ./Output/timeline_scheduler.o
+                0x000029c4                vTimelineSchedulerKernelStart
  .text.vTimelineSchedulerOnTickFromISR
-                0x00002ae0      0x2f8 ./Output/timeline_scheduler.o
-                0x00002ae0                vTimelineSchedulerOnTickFromISR
+                0x00002ad8      0x2f8 ./Output/timeline_scheduler.o
+                0x00002ad8                vTimelineSchedulerOnTickFromISR
  .text.xTimelineSchedulerSelectNextTask
-                0x00002dd8       0x54 ./Output/timeline_scheduler.o
-                0x00002dd8                xTimelineSchedulerSelectNextTask
+                0x00002dd0       0x54 ./Output/timeline_scheduler.o
+                0x00002dd0                xTimelineSchedulerSelectNextTask
  .text.vTimelineSchedulerTaskCompletedFromTaskContext
-                0x00002e2c      0x10c ./Output/timeline_scheduler.o
-                0x00002e2c                vTimelineSchedulerTaskCompletedFromTaskContext
+                0x00002e24      0x10c ./Output/timeline_scheduler.o
+                0x00002e24                vTimelineSchedulerTaskCompletedFromTaskContext
  .text.prvTimelineManagedTask
-                0x00002f38       0x88 ./Output/timeline_scheduler.o
+                0x00002f30       0x70 ./Output/timeline_scheduler.o
  .text.xTimelineSchedulerGetTaskExecutedTicks
-                0x00002fc0       0x2c ./Output/timeline_scheduler.o
-                0x00002fc0                xTimelineSchedulerGetTaskExecutedTicks
+                0x00002fa0       0x2c ./Output/timeline_scheduler.o
+                0x00002fa0                xTimelineSchedulerGetTaskExecutedTicks
  .text.vTimelineKernelHookSchedulerStart
-                0x00002fec       0x48 ./Output/timeline_kernel_hooks.o
-                0x00002fec                vTimelineKernelHookSchedulerStart
+                0x00002fcc       0x48 ./Output/timeline_kernel_hooks.o
+                0x00002fcc                vTimelineKernelHookSchedulerStart
  .text.vTimelineKernelHookTick
-                0x00003034        0x4 ./Output/timeline_kernel_hooks.o
-                0x00003034                vTimelineKernelHookTick
+                0x00003014        0x4 ./Output/timeline_kernel_hooks.o
+                0x00003014                vTimelineKernelHookTick
  .text.xTimelineKernelHookSelectTask
-                0x00003038        0x4 ./Output/timeline_kernel_hooks.o
-                0x00003038                xTimelineKernelHookSelectTask
+                0x00003018        0x4 ./Output/timeline_kernel_hooks.o
+                0x00003018                xTimelineKernelHookSelectTask
  .text.UART_init
-                0x0000303c        0xe ./Output/uart.o
-                0x0000303c                UART_init
+                0x0000301c        0xe ./Output/uart.o
+                0x0000301c                UART_init
  .text.UART_putc
-                0x0000304a        0xe ./Output/uart.o
-                0x0000304a                UART_putc
+                0x0000302a        0xe ./Output/uart.o
+                0x0000302a                UART_putc
  .text.UART_puts
-                0x00003058       0x14 ./Output/uart.o
-                0x00003058                UART_puts
+                0x00003038       0x14 ./Output/uart.o
+                0x00003038                UART_puts
  .text.UART_put_u32
-                0x0000306c       0x42 ./Output/uart.o
-                0x0000306c                UART_put_u32
- *fill*         0x000030ae        0x2 
+                0x0000304c       0x42 ./Output/uart.o
+                0x0000304c                UART_put_u32
+ *fill*         0x0000308e        0x2 
  .text.Reset_Handler
-                0x000030b0       0x10 ./Output/startup_mps2_an385.o
-                0x000030b0                Reset_Handler
- *fill*         0x000030c0       0x40 
+                0x00003090       0x10 ./Output/startup_mps2_an385.o
+                0x00003090                Reset_Handler
+ *fill*         0x000030a0       0x60 
  .text.Default_Handler
                 0x00003100        0xc ./Output/startup_mps2_an385.o
  *fill*         0x0000310c       0xf4 
@@ -1328,34 +1326,33 @@ END GROUP
                 0x00003258                prvGetRegistersFromStack
  *(.rodata*)
  .rodata.prvTaskIsTaskSuspended.str1.1
-                0x000032ac      0x1e5 ./Output/tasks.o
+                0x000032ac      0x1c8 ./Output/tasks.o
                                  0x20 (size before relaxing)
  .rodata.vTaskStartScheduler.str1.1
-                0x00003491        0xf ./Output/tasks.o
- *fill*         0x00003491        0x3 
+                0x00003474        0xf ./Output/tasks.o
  .rodata.uxTopUsedPriority
-                0x00003494        0x4 ./Output/tasks.o
+                0x00003474        0x4 ./Output/tasks.o
  .rodata.prvNotifyQueueSetContainer.str1.1
-                0x00003498       0x20 ./Output/queue.o
+                0x00003478       0x20 ./Output/queue.o
  .rodata.prvCheckForValidListAndQueue.str1.1
-                0x00003498        0x5 ./Output/timers.o
+                0x00003478        0x5 ./Output/timers.o
  .rodata.prvTimerTask.str1.1
-                0x00003498       0x21 ./Output/timers.o
+                0x00003478       0x21 ./Output/timers.o
  .rodata.xTimerCreateTimerTask.str1.1
-                0x00003498        0x8 ./Output/timers.o
+                0x00003478        0x8 ./Output/timers.o
  .rodata.pvPortMalloc.str1.1
-                0x00003498       0x32 ./Output/heap_4.o
+                0x00003478       0x32 ./Output/heap_4.o
  .rodata.prvTaskExitError.str1.1
-                0x00003498       0x34 ./Output/port.o
+                0x00003478       0x34 ./Output/port.o
  .rodata.main.str1.1
-                0x00003498        0xb ./Output/app_main.o
+                0x00003478        0xb ./Output/app_main.o
  .rodata.gTimelineConfig
-                0x00003498       0x10 ./Output/timeline_config.o
-                0x00003498                gTimelineConfig
+                0x00003478       0x10 ./Output/timeline_config.o
+                0x00003478                gTimelineConfig
  .rodata.str1.1
-                0x000034a8       0x46 ./Output/timeline_config.o
- .rodata.xTasks
-                0x000034a8       0xc0 ./Output/timeline_config.o
+                0x00003488       0x2a ./Output/timeline_config.o
+ .rodata.xTasksTimingConsistency
+                0x00003488       0xe0 ./Output/timeline_config.o
  .rodata.prvResetFrameRuntimeState.str1.1
                 0x00003568       0x1e ./Output/timeline_scheduler.o
  .rodata.prvDebugNormalizeTaskName.str1.1
@@ -1367,7 +1364,7 @@ END GROUP
  .rodata.vTimelineSchedulerOnTickFromISR.str1.1
                 0x00003568       0x23 ./Output/timeline_scheduler.o
  .rodata.vTimelineSchedulerTaskCompletedFromTaskContext.str1.1
-                0x00003568        0xf ./Output/timeline_scheduler.o
+                0x00003568        0xe ./Output/timeline_scheduler.o
  .rodata.vTimelineKernelHookSchedulerStart.str1.1
                 0x00003568       0x21 ./Output/timeline_kernel_hooks.o
  *(.constdata*)
@@ -1417,7 +1414,7 @@ END GROUP
 .igot.plt       0x20000008        0x0 load address 0x00003578
  .igot.plt      0x20000008        0x0 ./Output/tasks.o
 
-.bss            0x20000008    0x149a0 load address 0x00003578
+.bss            0x20000008    0x14720 load address 0x00003578
                 0x20000008                        . = ALIGN (0x8)
                 0x20000008                        _bss = .
                 0x20000008                        _sbss = .
@@ -1500,39 +1497,39 @@ END GROUP
                 0x200141d0        0x1 ./Output/port.o
  *fill*         0x200141d1        0x3 
  .bss.xTimeline
-                0x200141d4      0x7b0 ./Output/timeline_scheduler.o
- .bss.psr       0x20014984        0x4 ./Output/startup_mps2_an385.o
-                0x20014984                psr
- .bss.pc        0x20014988        0x4 ./Output/startup_mps2_an385.o
-                0x20014988                pc
- .bss.lr        0x2001498c        0x4 ./Output/startup_mps2_an385.o
-                0x2001498c                lr
- .bss.r12       0x20014990        0x4 ./Output/startup_mps2_an385.o
-                0x20014990                r12
- .bss.r3        0x20014994        0x4 ./Output/startup_mps2_an385.o
-                0x20014994                r3
- .bss.r2        0x20014998        0x4 ./Output/startup_mps2_an385.o
-                0x20014998                r2
- .bss.r1        0x2001499c        0x4 ./Output/startup_mps2_an385.o
-                0x2001499c                r1
- .bss.r0        0x200149a0        0x4 ./Output/startup_mps2_an385.o
-                0x200149a0                r0
+                0x200141d4      0x530 ./Output/timeline_scheduler.o
+ .bss.psr       0x20014704        0x4 ./Output/startup_mps2_an385.o
+                0x20014704                psr
+ .bss.pc        0x20014708        0x4 ./Output/startup_mps2_an385.o
+                0x20014708                pc
+ .bss.lr        0x2001470c        0x4 ./Output/startup_mps2_an385.o
+                0x2001470c                lr
+ .bss.r12       0x20014710        0x4 ./Output/startup_mps2_an385.o
+                0x20014710                r12
+ .bss.r3        0x20014714        0x4 ./Output/startup_mps2_an385.o
+                0x20014714                r3
+ .bss.r2        0x20014718        0x4 ./Output/startup_mps2_an385.o
+                0x20014718                r2
+ .bss.r1        0x2001471c        0x4 ./Output/startup_mps2_an385.o
+                0x2001471c                r1
+ .bss.r0        0x20014720        0x4 ./Output/startup_mps2_an385.o
+                0x20014720                r0
  *(COMMON)
-                0x200149a8                        . = ALIGN (0x8)
- *fill*         0x200149a4        0x4 
-                0x200149a8                        _ebss = .
+                0x20014728                        . = ALIGN (0x8)
+ *fill*         0x20014724        0x4 
+                0x20014728                        _ebss = .
 
-.heap           0x200149a8      0x408 load address 0x00003578
-                0x200149a8                        . = ALIGN (0x8)
+.heap           0x20014728      0x408 load address 0x00003578
+                0x20014728                        . = ALIGN (0x8)
                 [!provide]                        PROVIDE (end = .)
                 [!provide]                        PROVIDE (_end = .)
-                0x200149a8                        _heap_bottom = .
-                0x200149b0                        . = (. + _Min_Heap_Size)
- *fill*         0x200149a8        0x8 
-                0x200149b0                        _heap_top = .
-                0x20014db0                        . = (. + _Min_Stack_Size)
- *fill*         0x200149b0      0x400 
-                0x20014db0                        . = ALIGN (0x8)
+                0x20014728                        _heap_bottom = .
+                0x20014730                        . = (. + _Min_Heap_Size)
+ *fill*         0x20014728        0x8 
+                0x20014730                        _heap_top = .
+                0x20014b30                        . = (. + _Min_Stack_Size)
+ *fill*         0x20014730      0x400 
+                0x20014b30                        . = ALIGN (0x8)
                 0x20400000                        __StackTop = (ORIGIN (RAM) + LENGTH (RAM))
                 0x203ffc00                        __StackLimit = (__StackTop - _Min_Stack_Size)
                 [!provide]                        PROVIDE (__stack = __StackTop)
@@ -1540,7 +1537,7 @@ END GROUP
 OUTPUT(./Output/timeline_demo.elf elf32-littlearm)
 LOAD linker stubs
 
-.debug_info     0x00000000     0xb070
+.debug_info     0x00000000     0xafbd
  .debug_info    0x00000000      0x2b2 ./Output/list.o
  .debug_info    0x000002b2     0x34f4 ./Output/tasks.o
  .debug_info    0x000037a6     0x26cc ./Output/queue.o
@@ -1548,15 +1545,15 @@ LOAD linker stubs
  .debug_info    0x000074a1      0x741 ./Output/heap_4.o
  .debug_info    0x00007be2      0x5a1 ./Output/port.o
  .debug_info    0x00008183      0x357 ./Output/app_main.o
- .debug_info    0x000084da      0x4f2 ./Output/timeline_config.o
- .debug_info    0x000089cc     0x1b88 ./Output/timeline_scheduler.o
- .debug_info    0x0000a554      0x41e ./Output/timeline_kernel_hooks.o
- .debug_info    0x0000a972      0x23f ./Output/uart.o
- .debug_info    0x0000abb1      0x21c ./Output/startup_mps2_an385.o
- .debug_info    0x0000adcd      0x135 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-memset.o)
- .debug_info    0x0000af02       0x33 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-strcmp.o)
- .debug_info    0x0000af35      0x108 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-strncmp.o)
- .debug_info    0x0000b03d       0x33 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-memcpy.o)
+ .debug_info    0x000084da      0x4a9 ./Output/timeline_config.o
+ .debug_info    0x00008983     0x1b1e ./Output/timeline_scheduler.o
+ .debug_info    0x0000a4a1      0x41e ./Output/timeline_kernel_hooks.o
+ .debug_info    0x0000a8bf      0x23f ./Output/uart.o
+ .debug_info    0x0000aafe      0x21c ./Output/startup_mps2_an385.o
+ .debug_info    0x0000ad1a      0x135 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-memset.o)
+ .debug_info    0x0000ae4f       0x33 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-strcmp.o)
+ .debug_info    0x0000ae82      0x108 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-strncmp.o)
+ .debug_info    0x0000af8a       0x33 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-memcpy.o)
 
 .debug_abbrev   0x00000000     0x2136
  .debug_abbrev  0x00000000      0x105 ./Output/list.o
@@ -1577,7 +1574,7 @@ LOAD linker stubs
  .debug_abbrev  0x0000210e       0x28 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-memcpy.o)
 
 .debug_loclists
-                0x00000000     0x4f90
+                0x00000000     0x4f8d
  .debug_loclists
                 0x00000000       0x77 ./Output/list.o
  .debug_loclists
@@ -1593,17 +1590,17 @@ LOAD linker stubs
  .debug_loclists
                 0x000038bc      0x1a4 ./Output/timeline_config.o
  .debug_loclists
-                0x00003a60     0x1038 ./Output/timeline_scheduler.o
+                0x00003a60     0x1035 ./Output/timeline_scheduler.o
  .debug_loclists
-                0x00004a98       0xe3 ./Output/timeline_kernel_hooks.o
+                0x00004a95       0xe3 ./Output/timeline_kernel_hooks.o
  .debug_loclists
-                0x00004b7b       0xc5 ./Output/uart.o
+                0x00004b78       0xc5 ./Output/uart.o
  .debug_loclists
-                0x00004c40       0x40 ./Output/startup_mps2_an385.o
+                0x00004c3d       0x40 ./Output/startup_mps2_an385.o
  .debug_loclists
-                0x00004c80      0x1d7 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-memset.o)
+                0x00004c7d      0x1d7 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-memset.o)
  .debug_loclists
-                0x00004e57      0x139 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-strncmp.o)
+                0x00004e54      0x139 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-strncmp.o)
 
 .debug_aranges  0x00000000      0x760
  .debug_aranges
@@ -1640,7 +1637,7 @@ LOAD linker stubs
                 0x00000740       0x20 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-memcpy.o)
 
 .debug_rnglists
-                0x00000000      0x905
+                0x00000000      0x903
  .debug_rnglists
                 0x00000000       0x2b ./Output/list.o
  .debug_rnglists
@@ -1658,15 +1655,15 @@ LOAD linker stubs
  .debug_rnglists
                 0x000006a4       0x37 ./Output/timeline_config.o
  .debug_rnglists
-                0x000006db      0x1a9 ./Output/timeline_scheduler.o
+                0x000006db      0x1a7 ./Output/timeline_scheduler.o
  .debug_rnglists
-                0x00000884       0x1f ./Output/timeline_kernel_hooks.o
+                0x00000882       0x1f ./Output/timeline_kernel_hooks.o
  .debug_rnglists
-                0x000008a3       0x37 ./Output/uart.o
+                0x000008a1       0x37 ./Output/uart.o
  .debug_rnglists
-                0x000008da       0x2b ./Output/startup_mps2_an385.o
+                0x000008d8       0x2b ./Output/startup_mps2_an385.o
 
-.debug_macro    0x00000000     0x418b
+.debug_macro    0x00000000     0x4196
  .debug_macro   0x00000000      0x171 ./Output/list.o
  .debug_macro   0x00000171      0xac0 ./Output/list.o
  .debug_macro   0x00000c31       0x24 ./Output/list.o
@@ -1714,14 +1711,14 @@ LOAD linker stubs
  .debug_macro   0x00003acd      0x162 ./Output/port.o
  .debug_macro   0x00003c2f       0xc0 ./Output/app_main.o
  .debug_macro   0x00003cef       0x10 ./Output/app_main.o
- .debug_macro   0x00003cff       0xaf ./Output/timeline_config.o
- .debug_macro   0x00003dae      0x1b3 ./Output/timeline_scheduler.o
- .debug_macro   0x00003f61       0xbd ./Output/timeline_kernel_hooks.o
- .debug_macro   0x0000401e       0x41 ./Output/uart.o
- .debug_macro   0x0000405f      0x112 ./Output/uart.o
- .debug_macro   0x00004171       0x1a ./Output/startup_mps2_an385.o
+ .debug_macro   0x00003cff       0xba ./Output/timeline_config.o
+ .debug_macro   0x00003db9      0x1b3 ./Output/timeline_scheduler.o
+ .debug_macro   0x00003f6c       0xbd ./Output/timeline_kernel_hooks.o
+ .debug_macro   0x00004029       0x41 ./Output/uart.o
+ .debug_macro   0x0000406a      0x112 ./Output/uart.o
+ .debug_macro   0x0000417c       0x1a ./Output/startup_mps2_an385.o
 
-.debug_line     0x00000000     0x81af
+.debug_line     0x00000000     0x817e
  .debug_line    0x00000000      0x441 ./Output/list.o
  .debug_line    0x00000441     0x273a ./Output/tasks.o
  .debug_line    0x00002b7b     0x19e9 ./Output/queue.o
@@ -1729,34 +1726,34 @@ LOAD linker stubs
  .debug_line    0x000051ba      0x802 ./Output/heap_4.o
  .debug_line    0x000059bc      0x4cf ./Output/port.o
  .debug_line    0x00005e8b      0x245 ./Output/app_main.o
- .debug_line    0x000060d0      0x257 ./Output/timeline_config.o
- .debug_line    0x00006327     0x13bd ./Output/timeline_scheduler.o
- .debug_line    0x000076e4      0x249 ./Output/timeline_kernel_hooks.o
- .debug_line    0x0000792d      0x1c6 ./Output/uart.o
- .debug_line    0x00007af3      0x187 ./Output/startup_mps2_an385.o
- .debug_line    0x00007c7a      0x1b1 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-memset.o)
- .debug_line    0x00007e2b       0xdd /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-strcmp.o)
- .debug_line    0x00007f08      0x1ea /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-strncmp.o)
- .debug_line    0x000080f2       0xbd /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-memcpy.o)
+ .debug_line    0x000060d0      0x274 ./Output/timeline_config.o
+ .debug_line    0x00006344     0x136f ./Output/timeline_scheduler.o
+ .debug_line    0x000076b3      0x249 ./Output/timeline_kernel_hooks.o
+ .debug_line    0x000078fc      0x1c6 ./Output/uart.o
+ .debug_line    0x00007ac2      0x187 ./Output/startup_mps2_an385.o
+ .debug_line    0x00007c49      0x1b1 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-memset.o)
+ .debug_line    0x00007dfa       0xdd /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-strcmp.o)
+ .debug_line    0x00007ed7      0x1ea /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-strncmp.o)
+ .debug_line    0x000080c1       0xbd /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-memcpy.o)
 
-.debug_str      0x00000000    0x16c9a
- .debug_str     0x00000000    0x16c9a ./Output/list.o
+.debug_str      0x00000000    0x16c79
+ .debug_str     0x00000000    0x16c79 ./Output/list.o
                                0xfea5 (size before relaxing)
- .debug_str     0x00016c9a    0x13990 ./Output/tasks.o
- .debug_str     0x00016c9a    0x1283b ./Output/queue.o
- .debug_str     0x00016c9a    0x12b21 ./Output/timers.o
- .debug_str     0x00016c9a    0x119de ./Output/heap_4.o
- .debug_str     0x00016c9a     0xecbe ./Output/port.o
- .debug_str     0x00016c9a     0xe780 ./Output/app_main.o
- .debug_str     0x00016c9a     0xe63e ./Output/timeline_config.o
- .debug_str     0x00016c9a    0x126d7 ./Output/timeline_scheduler.o
- .debug_str     0x00016c9a     0xe70d ./Output/timeline_kernel_hooks.o
- .debug_str     0x00016c9a     0x43a6 ./Output/uart.o
- .debug_str     0x00016c9a     0x3987 ./Output/startup_mps2_an385.o
- .debug_str     0x00016c9a      0x1a5 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-memset.o)
- .debug_str     0x00016c9a       0xa8 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-strcmp.o)
- .debug_str     0x00016c9a      0x193 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-strncmp.o)
- .debug_str     0x00016c9a       0xa8 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-memcpy.o)
+ .debug_str     0x00016c79    0x13990 ./Output/tasks.o
+ .debug_str     0x00016c79    0x1283b ./Output/queue.o
+ .debug_str     0x00016c79    0x12b21 ./Output/timers.o
+ .debug_str     0x00016c79    0x119de ./Output/heap_4.o
+ .debug_str     0x00016c79     0xecbe ./Output/port.o
+ .debug_str     0x00016c79     0xe780 ./Output/app_main.o
+ .debug_str     0x00016c79     0xe60a ./Output/timeline_config.o
+ .debug_str     0x00016c79    0x12687 ./Output/timeline_scheduler.o
+ .debug_str     0x00016c79     0xe70d ./Output/timeline_kernel_hooks.o
+ .debug_str     0x00016c79     0x43a6 ./Output/uart.o
+ .debug_str     0x00016c79     0x3987 ./Output/startup_mps2_an385.o
+ .debug_str     0x00016c79      0x1a5 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-memset.o)
+ .debug_str     0x00016c79       0xa8 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-strcmp.o)
+ .debug_str     0x00016c79      0x193 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-strncmp.o)
+ .debug_str     0x00016c79       0xa8 /usr/lib/gcc/arm-none-eabi/14.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a(libc_a-memcpy.o)
 
 .comment        0x00000000       0x4c
  .comment       0x00000000       0x4c ./Output/list.o

@@ -10,7 +10,7 @@ static void vBusyWaitMs(const TimelineTaskExecutionInfo_t * pxExecInfo, uint32_t
         return;
     }
 
-    while (xTimelineSchedulerGetTaskExecutedTicks(pxExecInfo->uxTaskIndex) < xTargetTicks) {
+    while (xTimelineSchedulerGetTaskExecutedTicks(*pxExecInfo) < xTargetTicks) {
         taskYIELD();
     }
 }

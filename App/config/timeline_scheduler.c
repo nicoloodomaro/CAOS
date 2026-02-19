@@ -339,7 +339,6 @@ static void prvTimelineManagedTask(void * pvArg)
 {
     TimelineTaskContext_t * pxCtx = (TimelineTaskContext_t *) pvArg;
     const UBaseType_t uxIndex = pxCtx->uxIndex;
-    TimelineTaskExecutionInfo_t xExecInfo;
 
     for (;;) {
         const TimelineTaskConfig_t * pxTaskCfg;
@@ -351,9 +350,7 @@ static void prvTimelineManagedTask(void * pvArg)
         }
 
         pxTaskCfg = &xTimeline.pxConfig->pxTasks[uxIndex];
-        xExecInfo.uxTaskIndex = uxIndex;
-
-        pxTaskCfg->pxTaskCode((void *) &xExecInfo);
+        pxTaskCfg->pxTaskCode((void *) &pxCtx->uxIndex);
 
         if (pxTaskCfg->xType == TIMELINE_TASK_SRT) {
             /* Keep SRT completion aligned to a tick boundary so SRT hand-over
@@ -879,7 +876,7 @@ void vTimelineSchedulerTaskCompletedFromTaskContext(UBaseType_t uxTaskIndex)
 #if ( DEBUG == 1 )
     UART_puts("\t[");
     UART_puts(xTimeline.pxConfig->pxTasks[uxTaskIndex].pcName);
-    UART_puts("] terminated\r\n");
+    UART_puts("] completed\r\n");
 #endif
 
     /* Release the next SRT when no active HRT/SRT is present. */
