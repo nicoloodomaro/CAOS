@@ -24,6 +24,12 @@ SIZE := arm-none-eabi-size
 MACHINE := mps2-an385
 CPU := cortex-m3
 
+# Selected timeline profile and debug verbosity.
+# Example: make all PROFILE=3 TL_DEBUG=1
+PROFILE ?= 4
+TL_DEBUG ?= 1
+TEST_TIMEOUT ?= 3.0
+
 # Use -s to connect to gdb port 1234 and -S to wait before executing
 QEMU_FLAGS_DBG = -s -S
 
@@ -36,6 +42,10 @@ VPATH += $(DEMO_PROJECT) $(DEMO_PROJECT)/config $(DEMO_PROJECT)/board
 
 # Include paths. See INCLUDE_DIRS
 CFLAGS = $(INCLUDE_DIRS)
+
+# Build-time switches for timeline profile and debug prints.
+CFLAGS += -DCONFIG_PROFILE=$(PROFILE)
+CFLAGS += -DDEBUG=$(TL_DEBUG)
 
 # Don't include standard libraries
 CFLAGS += -ffreestanding
@@ -139,6 +149,25 @@ clean:
 run:
 	qemu-system-arm -machine $(MACHINE) -cpu $(CPU) -kernel \
 	$(ELF) -monitor none -nographic -serial stdio
+
+run-single:
+	@if [ -z "$(TEST)" ]; then \
+		echo "Usage: make run-single TEST=<1..11> [TL_DEBUG=1]"; \
+		exit 1; \
+	fi
+	$(MAKE) cleanobjs all PROFILE=$(TEST) TL_DEBUG=$(TL_DEBUG)
+	qemu-system-arm -machine $(MACHINE) -cpu $(CPU) -kernel \
+	$(ELF) -monitor none -nographic -serial stdio
+
+test-one:
+	@if [ -z "$(TEST)" ]; then \
+		echo "Usage: make test-one TEST=<1..11> [TEST_TIMEOUT=3.0]"; \
+		exit 1; \
+	fi
+	python3 ./tools/timeline_test_suite.py --test $(TEST) --timeout $(TEST_TIMEOUT)
+
+test-all:
+	python3 ./tools/timeline_test_suite.py --all --timeout $(TEST_TIMEOUT)
 
 debug: all
 	qemu-system-arm -machine $(MACHINE) -cpu $(CPU) -kernel \
