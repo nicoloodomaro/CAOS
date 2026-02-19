@@ -4,6 +4,14 @@ FREERTOS_ROOT := ../FreeRTOS_copy
 # Demo code
 DEMO_PROJECT := .
 
+# Timeline config file to compile (default: config 6)
+TIMELINE_CONFIG ?= timeline_config_6.c
+TIMELINE_CONFIG_SRC := $(DEMO_PROJECT)/config/$(TIMELINE_CONFIG)
+
+ifeq ($(wildcard $(TIMELINE_CONFIG_SRC)),)
+$(error Timeline config not found: $(TIMELINE_CONFIG_SRC))
+endif
+
 # FreeRTOS kernel
 KERNEL_DIR := $(FREERTOS_ROOT)/Source
 KERNEL_PORT_DIR := $(KERNEL_DIR)/portable/GCC/ARM_CM3
@@ -100,7 +108,7 @@ SOURCE_FILES += $(KERNEL_PORT_DIR)/port.c
 
 # Demo files
 SOURCE_FILES += $(DEMO_PROJECT)/app_main.c
-SOURCE_FILES += $(DEMO_PROJECT)/config/timeline_config.c
+SOURCE_FILES += $(TIMELINE_CONFIG_SRC)
 SOURCE_FILES += $(DEMO_PROJECT)/config/timeline_scheduler.c
 SOURCE_FILES += $(DEMO_PROJECT)/config/timeline_kernel_hooks.c
 SOURCE_FILES += $(DEMO_PROJECT)/board/uart.c
@@ -136,11 +144,11 @@ cleanobjs:
 clean:
 	rm -rf $(ELF) $(MAP) $(OUTPUT_DIR)/*.o $(OUTPUT_DIR)
 
-run:
+run: all
 	qemu-system-arm -machine $(MACHINE) -cpu $(CPU) -kernel \
 	$(ELF) -monitor none -nographic -serial stdio
 
-debug:
+debug: all
 	qemu-system-arm -machine $(MACHINE) -cpu $(CPU) -kernel \
 	$(ELF) -monitor none -nographic -serial stdio $(QEMU_FLAGS_DBG)
 
