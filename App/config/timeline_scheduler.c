@@ -5,7 +5,6 @@
 
 typedef struct TimelineTaskContext {
     UBaseType_t uxIndex;
-    TimelineTaskExecutionInfo_t xExecInfo;
 } TimelineTaskContext_t;
 
 typedef struct TimelineSchedulerState {
@@ -340,6 +339,7 @@ static void prvTimelineManagedTask(void * pvArg)
 {
     TimelineTaskContext_t * pxCtx = (TimelineTaskContext_t *) pvArg;
     const UBaseType_t uxIndex = pxCtx->uxIndex;
+    TimelineTaskExecutionInfo_t xExecInfo;
 
     for (;;) {
         const TimelineTaskConfig_t * pxTaskCfg;
@@ -351,15 +351,9 @@ static void prvTimelineManagedTask(void * pvArg)
         }
 
         pxTaskCfg = &xTimeline.pxConfig->pxTasks[uxIndex];
-        pxCtx->xExecInfo.uxTaskIndex = uxIndex;
-        pxCtx->xExecInfo.ulSubframeId = pxTaskCfg->ulSubframeId;
-        pxCtx->xExecInfo.ulStartOffsetMs = pxTaskCfg->ulStartOffsetMs;
-        pxCtx->xExecInfo.ulEndOffsetMs = pxTaskCfg->ulEndOffsetMs;
-        pxCtx->xExecInfo.ulRunDurationMs = (pxTaskCfg->ulEndOffsetMs > pxTaskCfg->ulStartOffsetMs) ?
-                                           (pxTaskCfg->ulEndOffsetMs - pxTaskCfg->ulStartOffsetMs) :
-                                           0U;
+        xExecInfo.uxTaskIndex = uxIndex;
 
-        pxTaskCfg->pxTaskCode((void *) &pxCtx->xExecInfo);
+        pxTaskCfg->pxTaskCode((void *) &xExecInfo);
 
         if (pxTaskCfg->xType == TIMELINE_TASK_SRT) {
             /* Keep SRT completion aligned to a tick boundary so SRT hand-over
@@ -466,11 +460,6 @@ static BaseType_t prvCreateManagedTaskIfMissing(UBaseType_t uxIndex)
     }
 
     xTimeline.xTaskContexts[uxIndex].uxIndex = uxIndex;
-    xTimeline.xTaskContexts[uxIndex].xExecInfo.uxTaskIndex = uxIndex;
-    xTimeline.xTaskContexts[uxIndex].xExecInfo.ulSubframeId = 0U;
-    xTimeline.xTaskContexts[uxIndex].xExecInfo.ulStartOffsetMs = 0U;
-    xTimeline.xTaskContexts[uxIndex].xExecInfo.ulEndOffsetMs = 0U;
-    xTimeline.xTaskContexts[uxIndex].xExecInfo.ulRunDurationMs = 0U;
     if (xTaskCreate(prvTimelineManagedTask,
                     pxTask->pcName,
                     pxTask->usStackDepthWords,

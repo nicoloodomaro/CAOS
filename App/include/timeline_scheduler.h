@@ -25,10 +25,6 @@ typedef struct TimelineTaskConfig {
 
 typedef struct TimelineTaskExecutionInfo {
     UBaseType_t uxTaskIndex;
-    uint32_t ulSubframeId;
-    uint32_t ulStartOffsetMs;
-    uint32_t ulEndOffsetMs;
-    uint32_t ulRunDurationMs;
 } TimelineTaskExecutionInfo_t;
 
 typedef struct TimelineConfig {
