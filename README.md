@@ -69,3 +69,31 @@ In `FreeRTOS/Source/tasks.c` aggiungi chiamate ai hook nei punti chiave:
 - Per jitter <= 1 tick reale, serve timer HW/port layer coerente con i requisiti della board.
 - Se l'applicazione non ha configurato esplicitamente il timeline (`xTimelineSchedulerConfigure`),
   l'hook di start effettua bootstrap automatico con `gTimelineConfig`.
+
+## Menu configurazione semplice (opzionale)
+
+Il flusso manuale con i profili `1..11` resta invariato.
+
+Per creare una nuova configurazione in modo guidato:
+
+```
+cd App
+make menu-config
+```
+
+Il menu:
+
+- crea/aggiorna `App/generated/timeline_problem.json`
+- esegue un controllo di coerenza/schedulabilita` timeline
+- genera `App/generated/timeline_config_generated.c`
+
+La config generata e` integrata come profilo `12`.
+
+Comandi utili:
+
+```
+cd App
+make cleanobjs all PROFILE=7 TL_DEBUG=1      # profili manuali esistenti
+make cleanobjs all PROFILE=12 TL_DEBUG=1     # profilo generato dal menu
+make run-single TEST=12 TL_DEBUG=1
+```

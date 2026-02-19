@@ -152,7 +152,7 @@ run:
 
 run-single:
 	@if [ -z "$(TEST)" ]; then \
-		echo "Usage: make run-single TEST=<1..11> [TL_DEBUG=1]"; \
+		echo "Usage: make run-single TEST=<1..12> [TL_DEBUG=1]"; \
 		exit 1; \
 	fi
 	$(MAKE) cleanobjs all PROFILE=$(TEST) TL_DEBUG=$(TL_DEBUG)
@@ -168,6 +168,9 @@ test-one:
 
 test-all:
 	python3 ./tools/timeline_test_suite.py --all --timeout $(TEST_TIMEOUT)
+
+menu-config:
+	python3 ./tools/timeline_simple_menu.py
 
 debug: all
 	qemu-system-arm -machine $(MACHINE) -cpu $(CPU) -kernel \

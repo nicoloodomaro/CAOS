@@ -24,6 +24,8 @@
 #include "../test_config/test_10.c"
 #elif (CONFIG_PROFILE == 11)
 #include "../test_config/test_11.c"
+#elif (CONFIG_PROFILE == 12)
+#include "../generated/timeline_config_generated.c"
 #else
-#error "Unsupported CONFIG_PROFILE value. Use 1..11."
+#error "Unsupported CONFIG_PROFILE value. Use 1..12."
 #endif
