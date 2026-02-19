@@ -2,7 +2,6 @@
 import argparse
 import os
 import re
-import signal
 import subprocess
 import sys
 import tempfile
@@ -335,7 +334,7 @@ def _format_result(spec: TestSpec, result: TestResult) -> str:
 
 
 def run_test(app_dir: Path, spec: TestSpec, timeout_s: float, live: bool) -> TestResult:
-    build_ok, build_log = _build_profile(app_dir, spec.test_id)
+    build_ok, _ = _build_profile(app_dir, spec.test_id)
     if not build_ok:
         return TestResult(False, "Build failed")
 
@@ -354,7 +353,7 @@ def parse_args() -> argparse.Namespace:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--all", action="store_true", help="Run all tests sequentially")
     mode.add_argument("--test", type=int, help="Run one specific test id")
-    parser.add_argument("--timeout", type=float, default=3.0, help="Per-test QEMU timeout in seconds")
+    parser.add_argument("--timeout", type=float, default=1.2, help="Per-test QEMU timeout in seconds")
     return parser.parse_args()
 
 
