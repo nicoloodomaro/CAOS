@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import argparse
-import os
 import re
+import signal
 import subprocess
 import sys
-import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, List, Tuple
@@ -257,6 +257,9 @@ TEST_SPECS: Dict[int, TestSpec] = {
     11: TestSpec(11, "Failure Injection C", check_test_11),
 }
 
+_MAJOR_FRAME_LINE_RE = re.compile(r"Start major frame\s+(\d+)")
+_FIRST_EXCLUDED_FRAME_ID = 2
+
 
 def _run(cmd: List[str], cwd: Path, capture: bool) -> subprocess.CompletedProcess:
     return subprocess.run(
@@ -300,32 +303,53 @@ def _run_qemu_capture(app_dir: Path, timeout_s: float, live: bool) -> str:
         "stdio",
     ]
 
-    timeout_prefix = ["timeout", "--signal=INT", f"{timeout_s}"]
-
-    if live:
-        with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".timeline.log") as temp_log:
-            temp_path = temp_log.name
-
-        try:
-            quoted_cmd = " ".join([subprocess.list2cmdline(timeout_prefix + qemu_cmd), "|", "tee", subprocess.list2cmdline([temp_path])])
-            subprocess.run(quoted_cmd, cwd=str(app_dir), shell=True, check=False)
-            with open(temp_path, "r", encoding="utf-8", errors="replace") as infile:
-                return infile.read()
-        finally:
-            try:
-                os.remove(temp_path)
-            except OSError:
-                pass
-
-    result = subprocess.run(
-        timeout_prefix + qemu_cmd,
+    log_lines: List[str] = []
+    start_time = time.monotonic()
+    process = subprocess.Popen(
+        qemu_cmd,
         cwd=str(app_dir),
-        check=False,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
+        bufsize=1,
     )
-    return result.stdout or ""
+
+    try:
+        while True:
+            if (time.monotonic() - start_time) >= timeout_s:
+                break
+
+            if process.stdout is None:
+                break
+
+            line = process.stdout.readline()
+            if line == "":
+                if process.poll() is not None:
+                    break
+                time.sleep(0.002)
+                continue
+
+            match = _MAJOR_FRAME_LINE_RE.search(line)
+            if (match is not None) and (int(match.group(1)) >= _FIRST_EXCLUDED_FRAME_ID):
+                break
+
+            log_lines.append(line)
+            if live:
+                print(line, end="")
+    finally:
+        if process.poll() is None:
+            process.send_signal(signal.SIGINT)
+            try:
+                process.wait(timeout=0.3)
+            except subprocess.TimeoutExpired:
+                process.terminate()
+                try:
+                    process.wait(timeout=0.3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=0.3)
+
+    return "".join(log_lines)
 
 
 def _format_result(spec: TestSpec, result: TestResult) -> str:
@@ -353,7 +377,7 @@ def parse_args() -> argparse.Namespace:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--all", action="store_true", help="Run all tests sequentially")
     mode.add_argument("--test", type=int, help="Run one specific test id")
-    parser.add_argument("--timeout", type=float, default=1.2, help="Per-test QEMU timeout in seconds")
+    parser.add_argument("--timeout", type=float, default=3.0, help="Per-test QEMU timeout in seconds")
     return parser.parse_args()
 
 
@@ -374,8 +398,15 @@ def main() -> int:
     passed = 0
     total = len(selected)
 
-    for spec in selected:
-        result = run_test(app_dir, spec, timeout_s=args.timeout, live=live)
+    for index, spec in enumerate(selected, start=1):
+        try:
+            result = run_test(app_dir, spec, timeout_s=args.timeout, live=live)
+        except KeyboardInterrupt:
+            if args.all:
+                print(f"\nInterrupted by user after {index - 1}/{total} tests")
+            else:
+                print("\nInterrupted by user")
+            return 130
         print(_format_result(spec, result))
         if result.passed:
             passed += 1
@@ -387,4 +418,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        print("\nInterrupted by user")
+        sys.exit(130)

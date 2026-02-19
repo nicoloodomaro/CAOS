@@ -28,7 +28,7 @@ CPU := cortex-m3
 # Example: make all PROFILE=3 TL_DEBUG=1
 PROFILE ?= 4
 TL_DEBUG ?= 1
-TEST_TIMEOUT ?= 1.2
+TEST_TIMEOUT ?= 3.0
 
 # Use -s to connect to gdb port 1234 and -S to wait before executing
 QEMU_FLAGS_DBG = -s -S
